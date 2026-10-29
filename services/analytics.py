@@ -7,7 +7,7 @@ import io
 import math
 from typing import Any, Sequence
 
-from aiogram.types import BufferedInputFile, InlineKeyboardMarkup
+from aiogram.types import BufferedInputFile, InlineKeyboardMarkup, LinkPreviewOptions
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import fmt_money, fmt_money_with_uah, normalize_lang, t
@@ -41,6 +41,60 @@ def truncate_title(title: str, max_len: int = 38) -> str:
     if len(clean) <= max_len:
         return html.escape(clean)
     return html.escape(clean[: max_len - 1].rstrip() + "…")
+
+
+_ZERO_WIDTH_IMAGE_MARKER = "\u200d"  # &#8205;
+
+
+def embed_invisible_image_link(text: str, image_url: str | None) -> str:
+    """
+    Вбудовує невидиме HTML-посилання на фото товару (CDN маркетплейсу) на початку тексту.
+    Telegram завантажує та рендерить картинку напряму зі сторони своїх серверів —
+    бот НЕ завантажує і НЕ зберігає жодного байта зображень на сервері (0 МБ диска/RAM).
+    """
+    clean_img = (image_url or "").strip()
+    if not clean_img.startswith(("https://", "http://")):
+        return text
+    safe_url = html.escape(clean_img, quote=True)
+    return f'<a href="{safe_url}">{_ZERO_WIDTH_IMAGE_MARKER}</a>{text}'
+
+
+def extract_embedded_image_url(text: str) -> str | None:
+    """Витягує URL картинки з невидимого тегу на початку повідомлення, якщо він є."""
+    if not text.startswith('<a href="') or f">{_ZERO_WIDTH_IMAGE_MARKER}</a>" not in text[:450]:
+        return None
+    end_quote = text.find('">', 9)
+    if end_quote == -1:
+        return None
+    return html.unescape(text[9:end_quote])
+
+
+def build_image_preview_options(
+    image_url: str | None = None,
+    *,
+    fallback_url: str | None = None,
+    text: str | None = None,
+) -> LinkPreviewOptions:
+    """
+    Формує параметри прев'ю для Telegram Bot API:
+    якщо є пряме посилання на фото товару (або воно вбудоване в text через embed_invisible_image_link),
+    вмикає велике фото зверху картки без збереження файлів на сервері.
+    Інакше вимикає прев'ю, щоб у списках не з'являлися випадкові прев'ю сайтів.
+    """
+    target_url = (image_url or "").strip()
+    if not target_url and text:
+        target_url = extract_embedded_image_url(text) or ""
+    if not target_url and fallback_url:
+        target_url = fallback_url.strip()
+
+    if target_url.startswith(("https://", "http://")):
+        return LinkPreviewOptions(
+            is_disabled=False,
+            url=target_url,
+            prefer_large_media=True,
+            show_above_text=True,
+        )
+    return LinkPreviewOptions(is_disabled=True)
 
 
 from dataclasses import dataclass
@@ -473,6 +527,8 @@ def build_product_caption_with_30d_stats(
     history_prices: Sequence[Decimal | float] | None = None,
     target_price: Decimal | None = None,
     category_tag: str | None = None,
+    image_url: str | None = None,
+    product_url: str | None = None,
     status_header: str = "",
     status_line: str = "",
     lang: str = "uk",
@@ -483,6 +539,7 @@ def build_product_caption_with_30d_stats(
     - Авто-перерахунок валют у гривню за курсом НБУ ($/€/zł ➔ ~₴)
     - Режим «🟢 Снайпер наявності» (коли товар розкуплений)
     - Бейдж розумної добірки / вішлісту (📁 Категорія)
+    - Невидиме посилання на фото товару з CDN магазину (0 МБ на сервері)
     """
     lang = normalize_lang(lang)
     cur_dec = Decimal(str(current_price))
@@ -505,6 +562,7 @@ def build_product_caption_with_30d_stats(
 
     cat_badge = format_category_badge(category_tag, lang)
     cat_part = f" · {cat_badge}" if cat_badge else ""
+    preview_target = image_url or product_url
 
     if not is_available or cur_dec <= Decimal("0"):
         sniper_lbl = {
@@ -517,7 +575,7 @@ def build_product_caption_with_30d_stats(
             if cur_dec > Decimal("0")
             else ""
         )
-        return (
+        sniper_card = (
             f"{header_text}\n"
             f"──────────────────────────────────\n"
             f"📦 <b>{short_title}</b>\n"
@@ -525,6 +583,7 @@ def build_product_caption_with_30d_stats(
             f"{sniper_lbl}{last_known}\n"
             f"──────────────────────────────────"
         )
+        return embed_invisible_image_link(sniper_card, preview_target)
 
     # Визначаємо референсну стару ціну для бейджа динаміки
     ref_old = old_price if (old_price and old_price > cur_dec) else start_30d
@@ -622,7 +681,7 @@ def build_product_caption_with_30d_stats(
         "ru": "💡 <i>Быстрая цель скидки: нажмите 🎯-5%, 🎯-10% или 🎯-15% ниже</i>",
     }.get(lang, "")
 
-    return (
+    card_body = (
         f"{header_text}\n"
         f"──────────────────────────────────\n"
         f"📦 <b>{short_title}</b>\n"
@@ -638,6 +697,7 @@ def build_product_caption_with_30d_stats(
         f"🔴 {lbl_max}: <code>{fmt_money(max_30d, curr)}</code>\n"
         f"{quick_tip}"
     )
+    return embed_invisible_image_link(card_body, preview_target)
 
 
 def render_target_price_card(
@@ -981,6 +1041,16 @@ def render_search_results_card(
         + "\n\n".join(rows)
         + f"\n──────────────────────\n{footer}"
     )
+    best_img = next(
+        (
+            str(o.image_url).strip()
+            for o in offers
+            if getattr(o, "image_url", None) and str(o.image_url).strip().startswith(("https://", "http://"))
+        ),
+        None,
+    )
+    if best_img:
+        text = embed_invisible_image_link(text, best_img)
     return text, build_search_results_keyboard(offers, lang=lang)
 
 
@@ -1634,7 +1704,7 @@ async def render_ai_price_forecast_card(
         currency=curr,
         lang=lang,
     )
-    return text, kb
+    return embed_invisible_image_link(text, product.image_url or product.url), kb
 
 
 async def render_pro_offer_card(

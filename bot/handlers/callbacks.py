@@ -49,6 +49,7 @@ from database import crud
 from database.models import User
 from services.analytics import (
     build_daily_digest_card,
+    build_image_preview_options,
     build_price_drop_alert_card,
     compute_optimal_target_price,
     render_add_product_guide_card,
@@ -81,18 +82,28 @@ async def _smart_render(
     """
     Плавна Single-Window (SPA) навігація:
     редагує поточне текстове повідомлення на місці замість дублювання нових повідомлень у чаті.
-    Якщо поточне повідомлення є фото-графіком або не може бути відредаговане — надсилає нове.
+    Якщо повідомлення містить вбудоване фото товару з CDN магазину — автоматично вмикає прев'ю зверху,
+    а для списків і меню — вимикає його.
     """
     if callback.message is None:
         return
+    preview_opts = build_image_preview_options(text=text)
     if not callback.message.photo and not callback.message.document:
         try:
-            await callback.message.edit_text(text=text, reply_markup=reply_markup)
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=reply_markup,
+                link_preview_options=preview_opts,
+            )
             return
         except Exception as exc:
             if "message is not modified" in str(exc).lower():
                 return
-    await callback.message.answer(text=text, reply_markup=reply_markup)
+    await callback.message.answer(
+        text=text,
+        reply_markup=reply_markup,
+        link_preview_options=preview_opts,
+    )
 
 
 @router.callback_query(LanguageCallback.filter())
@@ -458,6 +469,8 @@ async def _render_product_card_view(
         history_prices=history_prices,
         target_price=sub.target_price if sub else None,
         category_tag=getattr(sub, "category_tag", None) if sub else None,
+        image_url=prod_with_hist.image_url,
+        product_url=prod_with_hist.url,
         status_header=status_header or default_header,
         lang=lang,
     )
@@ -746,9 +759,17 @@ async def handle_product_action(
                     if callback.message.photo:
                         await callback.message.edit_caption(caption=caption, reply_markup=kb)
                     else:
-                        await callback.message.edit_text(text=caption, reply_markup=kb)
+                        await callback.message.edit_text(
+                            text=caption,
+                            reply_markup=kb,
+                            link_preview_options=build_image_preview_options(text=caption),
+                        )
                 except Exception:
-                    await callback.message.answer(caption, reply_markup=kb)
+                    await callback.message.answer(
+                        caption,
+                        reply_markup=kb,
+                        link_preview_options=build_image_preview_options(text=caption),
+                    )
         return
 
     # Швидкий вибір відсотка знижки (-5%, -10%, -15%) одним кліком з картки товару
@@ -785,9 +806,17 @@ async def handle_product_action(
                     if callback.message.photo:
                         await callback.message.edit_caption(caption=caption, reply_markup=kb)
                     else:
-                        await callback.message.edit_text(text=caption, reply_markup=kb)
+                        await callback.message.edit_text(
+                            text=caption,
+                            reply_markup=kb,
+                            link_preview_options=build_image_preview_options(text=caption),
+                        )
                 except Exception:
-                    await callback.message.answer(caption, reply_markup=kb)
+                    await callback.message.answer(
+                        caption,
+                        reply_markup=kb,
+                        link_preview_options=build_image_preview_options(text=caption),
+                    )
         return
 
     if action == "card":
@@ -949,6 +978,8 @@ async def handle_product_action(
             is_available=scraped.is_available,
             history_prices=history_prices,
             target_price=sub.target_price if sub else None,
+            image_url=product.image_url or scraped.image_url,
+            product_url=product.url,
             status_header=t("status_tracking_updated", lang),
             lang=lang,
         )

@@ -569,7 +569,14 @@ async def _search_rozetka_api(
             if _is_unwanted_accessory(title, query):
                 return None
             clean_u, _ = normalize_url(href)
-            img = src.get("image_main") if isinstance(src.get("image_main"), str) else None
+            raw_img = (
+                src.get("image_main")
+                or raw_item.get("image_main")
+                or src.get("preview")
+                or raw_item.get("preview")
+                or raw_item.get("image")
+            )
+            img = str(raw_img).strip() if isinstance(raw_img, str) and str(raw_img).strip().startswith("http") else None
             tok = _make_token(clean_u)
             if old_price is not None and old_price <= price:
                 old_price = None
@@ -705,6 +712,9 @@ async def _search_telemart_or_moyo(client: httpx.AsyncClient, query: str, limit:
                 continue
             clean_u, _ = normalize_url(href)
             tok = _make_token(clean_u)
+            img_el = card.select_one("img")
+            raw_img = (img_el.get("data-src") or img_el.get("src") or "") if img_el else ""
+            img_url = str(raw_img).strip() if str(raw_img).strip().startswith("http") else None
             offers.append(
                 SearchOffer(
                     token=tok,
@@ -714,7 +724,7 @@ async def _search_telemart_or_moyo(client: httpx.AsyncClient, query: str, limit:
                     old_price=None,
                     currency="UAH",
                     marketplace="telemart",
-                    image_url=None,
+                    image_url=img_url,
                     is_available=True,
                 )
             )

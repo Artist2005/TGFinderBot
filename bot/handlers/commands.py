@@ -36,6 +36,7 @@ from config import settings
 from database import crud
 from database.models import User
 from services.analytics import (
+    build_image_preview_options,
     build_price_drop_alert_card,
     build_product_caption_with_30d_stats,
     generate_user_csv_report,
@@ -161,6 +162,8 @@ async def cmd_start(
                     history_prices=history_prices,
                     target_price=sub.target_price if sub else None,
                     category_tag=getattr(sub, "category_tag", None) if sub else None,
+                    image_url=prod_with_hist.image_url,
+                    product_url=prod_with_hist.url,
                     status_header=t("status_tracking_on", lang),
                     lang=lang,
                 )
@@ -178,7 +181,11 @@ async def cmd_start(
                     t("start_welcome", lang, tier=tier_badge, limit=limit),
                     reply_markup=build_main_reply_keyboard(lang, items_count=items_count),
                 )
-                await message.answer(caption, reply_markup=kb)
+                await message.answer(
+                    caption,
+                    reply_markup=kb,
+                    link_preview_options=build_image_preview_options(text=caption),
+                )
                 return
 
     text = t("start_welcome", lang, tier=tier_badge, limit=limit)

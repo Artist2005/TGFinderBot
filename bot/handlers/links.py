@@ -33,8 +33,10 @@ from config import settings
 from database import crud
 from database.models import User
 from services.analytics import (
+    build_image_preview_options,
     build_product_caption_with_30d_stats,
     compute_deal_score,
+    embed_invisible_image_link,
     render_my_tracking_text_and_kb,
     render_pro_offer_card,
     render_search_results_card,
@@ -122,6 +124,8 @@ async def handle_target_price_input(
         is_available=True,
         history_prices=history_prices,
         target_price=target_val,
+        image_url=prod_with_hist.image_url,
+        product_url=prod_with_hist.url,
         status_header=t("target_set_ok", lang, price=formatted_target),
         lang=lang,
     )
@@ -134,7 +138,11 @@ async def handle_target_price_input(
         price_str=fmt_money(cur_dec, curr),
         lang=lang,
     )
-    await message.answer(caption, reply_markup=kb)
+    await message.answer(
+        caption,
+        reply_markup=kb,
+        link_preview_options=build_image_preview_options(text=caption),
+    )
 
 
 @router.message(F.text.regexp(r"https?://\S+"))
@@ -316,6 +324,8 @@ async def handle_product_link(
         history_prices=history_prices,
         target_price=sub.target_price,
         category_tag=getattr(sub, "category_tag", None),
+        image_url=product.image_url or scraped.image_url,
+        product_url=product.url,
         status_header=sub_status,
         lang=lang,
     )
@@ -332,7 +342,11 @@ async def handle_product_link(
         lang=lang,
     )
 
-    await status_msg.edit_text(caption, reply_markup=kb)
+    await status_msg.edit_text(
+        caption,
+        reply_markup=kb,
+        link_preview_options=build_image_preview_options(text=caption),
+    )
 
 
 # Множина всіх відомих текстів кнопок меню, які не повинні запускати пошук товарів
@@ -465,14 +479,17 @@ async def handle_inline_query(
             "ru": "🛒 Открыть в магазине",
         }.get(lang, "🛒 Відкрити в магазине")
 
-        msg_text = (
-            f"💰 <b><code>{price_fmt}</code></b>{old_part} · 🏪 <b>{mp_short}</b>\n"
-            f"──────────────────────\n"
-            f"🛍 <b>{html.escape(off.title[:85])}</b>\n"
-            f"📍 <b>Магазин:</b> {mp_label}\n"
-            f"⚖️ <b>Deal Score:</b> <code>{score}/100</code>\n"
-            f"──────────────────────\n"
-            f"🤖 <i>Знайдено через @{bot_username} — розумний моніторинг знижок 24/7</i>"
+        msg_text = embed_invisible_image_link(
+            (
+                f"💰 <b><code>{price_fmt}</code></b>{old_part} · 🏪 <b>{mp_short}</b>\n"
+                f"──────────────────────\n"
+                f"🛍 <b>{html.escape(off.title[:85])}</b>\n"
+                f"📍 <b>Магазин:</b> {mp_label}\n"
+                f"⚖️ <b>Deal Score:</b> <code>{score}/100</code>\n"
+                f"──────────────────────\n"
+                f"🤖 <i>Знайдено через @{bot_username} — розумний моніторинг знижок 24/7</i>"
+            ),
+            off.image_url or off.url,
         )
 
         kb = InlineKeyboardMarkup(
@@ -482,11 +499,7 @@ async def handle_inline_query(
             ]
         )
 
-        thumb = None
-        if off.image_url and off.image_url.startswith("https://"):
-            lower_img = off.image_url.lower().split("?")[0]
-            if lower_img.endswith((".jpg", ".jpeg", ".png")):
-                thumb = off.image_url
+        thumb = off.image_url if (off.image_url and off.image_url.startswith("https://")) else None
 
         results.append(
             InlineQueryResultArticle(
@@ -497,6 +510,7 @@ async def handle_inline_query(
                 input_message_content=InputTextMessageContent(
                     message_text=msg_text,
                     parse_mode="HTML",
+                    link_preview_options=build_image_preview_options(off.image_url, fallback_url=off.url),
                 ),
                 reply_markup=kb,
             )
@@ -563,4 +577,8 @@ async def handle_text_product_search(
     offers = await search_products_by_name(session, query, limit=6)
     display_q = norm_q if norm_q.lower() != query.lower() else query
     text, kb = render_search_results_card(display_q, offers, lang=lang)
-    await status_msg.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+    await status_msg.edit_text(
+        text,
+        reply_markup=kb,
+        link_preview_options=build_image_preview_options(text=text),
+    )
