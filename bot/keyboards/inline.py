@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 import math
+import re
 from typing import Any, Sequence
 from urllib.parse import quote
 
@@ -43,6 +44,28 @@ def format_category_badge(tag: str | None, lang: str = "uk") -> str:
     if not cat:
         return ""
     return cat.get(lang, cat["uk"])
+
+
+_GENERIC_PREFIX_RE = re.compile(
+    r"^(?:навушники(?:\s+вкладиші)?(?:\s+бездротові)?(?:\s+tws)?|"
+    r"бездротові\s+навушники(?:\s+tws)?|наушники(?:\s+беспроводные)?(?:\s+tws)?|"
+    r"мобільний\s+телефон|мобильный\s+телефон|смартфон|"
+    r"ігрова\s+(?:приставка|консоль)|игровая\s+(?:приставка|консоль)|"
+    r"ноутбук|планшет|телевізор|телевизор|монітор|монитор|"
+    r"розумний\s+годинник|смарт-годинник|смарт\s+годинник)\s+",
+    re.IGNORECASE,
+)
+
+
+def _compact_title(raw_title: object, max_len: int = 15) -> str:
+    """Скорочує назву товару для інлайн-кнопок, прибираючи зайві загальні слова на початку."""
+    clean = " ".join(str(raw_title or "").split())
+    stripped = _GENERIC_PREFIX_RE.sub("", clean).strip()
+    if len(stripped) >= 4:
+        clean = stripped
+    if len(clean) <= max_len:
+        return clean
+    return clean[: max_len - 1].rstrip() + "…"
 
 
 def _short_price(val: Decimal | float, currency: str = "UAH") -> str:
@@ -815,12 +838,12 @@ def build_top_drops_keyboard(
         prod_id = int(getattr(prod, "id", 0))
         is_tracked = bool(item.get("is_user_tracked", False))
         cur_price = _short_price(getattr(prod, "current_price", 0), getattr(prod, "currency", "UAH"))
-        short_t = str(getattr(prod, "title", ""))[:20].strip()
+        short_t = _compact_title(getattr(prod, "title", ""), max_len=14)
         prefix = medals.get(idx, "🔥")
         star = "⭐️ " if is_tracked else ""
         builder.row(
             InlineKeyboardButton(
-                text=f"{prefix} #{idx} (−{pct}%) · {star}{short_t}… — {cur_price}",
+                text=f"{prefix} #{idx} · {cur_price} (−{pct}%) · {star}{short_t}",
                 callback_data=ProductActionCallback(action="card", product_id=prod_id).pack(),
             )
         )
@@ -1019,8 +1042,8 @@ def build_tracking_list_keyboard(
 
     for idx, sub in enumerate(page_subs, start=start_idx + 1):
         product = sub.product
-        store_short = format_marketplace_name(product.marketplace)[:10]
-        short_title = product.title[:16] + ("…" if len(product.title) > 16 else "")
+        store_short = format_marketplace_name(product.marketplace)[:9]
+        short_title = _compact_title(product.title, max_len=14)
         is_avail = bool(getattr(product, "is_available", True))
         if not is_avail or Decimal(str(product.current_price)) <= Decimal("0"):
             price_str = "🟢 Снайпер" if lang != "en" else "🟢 Sniper"
@@ -1034,7 +1057,7 @@ def build_tracking_list_keyboard(
 
         builder.row(
             InlineKeyboardButton(
-                text=f"📦 {idx}. {cat_icon}{store_short} · {short_title} — {price_str}{target_mark}",
+                text=f"📦 #{idx} · {price_str}{target_mark} · {cat_icon}{store_short} · {short_title}",
                 callback_data=ProductActionCallback(action="card", product_id=product.id).pack(),
             )
         )
@@ -1127,9 +1150,8 @@ def build_search_results_keyboard(
     medals = {1: "🥇", 2: "🥈", 3: "🥉"}
 
     for idx, offer in enumerate(offers[:6], start=1):
-        store_short = format_marketplace_name(getattr(offer, "marketplace", "store"))[:10]
-        title_str = str(getattr(offer, "title", ""))
-        short_title = title_str[:16] + ("…" if len(title_str) > 16 else "")
+        store_short = format_marketplace_name(getattr(offer, "marketplace", "store"))[:9]
+        short_title = _compact_title(getattr(offer, "title", ""), max_len=14)
         is_avail = bool(getattr(offer, "is_available", True))
         price_val = getattr(offer, "price", Decimal("0"))
         curr = str(getattr(offer, "currency", "UAH"))
@@ -1141,10 +1163,9 @@ def build_search_results_keyboard(
             price_badge = _short_price(price_val, curr)
 
         prefix = medals.get(idx, "➕")
-        track_verb = "Track" if lang == "en" else ("Следить" if lang == "ru" else "Стежити")
         builder.row(
             InlineKeyboardButton(
-                text=f"{prefix} #{idx} {track_verb}: {store_short} · {short_title} — {price_badge}",
+                text=f"{prefix} #{idx} · {price_badge} · {store_short} · {short_title}",
                 callback_data=SearchCallback(action="track", token=token).pack(),
             )
         )
@@ -1178,12 +1199,12 @@ def build_shared_wishlist_keyboard(
 
     for idx, sub in enumerate(subscriptions[:8], start=1):
         p = sub.product
-        store_short = format_marketplace_name(p.marketplace)[:10]
-        short_title = p.title[:18] + ("…" if len(p.title) > 18 else "")
+        store_short = format_marketplace_name(p.marketplace)[:9]
+        short_title = _compact_title(p.title, max_len=15)
         price_str = _short_price(p.current_price, p.currency)
         builder.row(
             InlineKeyboardButton(
-                text=f"➕ #{idx} {store_short} · {short_title} — {price_str}",
+                text=f"➕ #{idx} · {price_str} · {store_short} · {short_title}",
                 callback_data=ProductActionCallback(action="card", product_id=p.id).pack(),
             )
         )

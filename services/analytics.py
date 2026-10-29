@@ -14,6 +14,7 @@ from bot.i18n import fmt_money, fmt_money_with_uah, normalize_lang, t
 from bot.keyboards.inline import (
     ITEMS_PER_PAGE,
     WISHLIST_CATEGORIES,
+    _GENERIC_PREFIX_RE,
     build_add_guide_keyboard,
     build_ai_forecast_keyboard,
     build_pro_offer_keyboard,
@@ -28,12 +29,15 @@ from config import settings
 from database import crud
 from database.models import Product, User, UserProduct
 from services.currency import to_uah
-from services.scraper.normalizer import format_marketplace_label
+from services.scraper.normalizer import format_marketplace_label, format_marketplace_name
 
 
-def truncate_title(title: str, max_len: int = 48) -> str:
-    """Скорочує назву товару до 45–50 символів із трикрапкою для ідеальної адаптивності на смартфонах."""
+def truncate_title(title: str, max_len: int = 38) -> str:
+    """Скорочує назву товару, прибираючи зайві загальні префікси, для ідеальної адаптивності на смартфонах."""
     clean = " ".join((title or "").split())
+    stripped = _GENERIC_PREFIX_RE.sub("", clean).strip()
+    if len(stripped) >= 4:
+        clean = stripped
     if len(clean) <= max_len:
         return html.escape(clean)
     return html.escape(clean[: max_len - 1].rstrip() + "…")
@@ -937,15 +941,16 @@ def render_search_results_card(
         return txt, build_add_guide_keyboard(lang)
 
     header = {
-        "uk": f"🔍 <b>НАЙНИЖЧІ ЦІНИ ЗА ЗАПИТОМ: «{safe_q}»</b>",
-        "en": f"🔍 <b>LOWEST PRICES FOR: «{safe_q}»</b>",
-        "ru": f"🔍 <b>ЛУЧШИЕ ЦЕНЫ ПО ЗАПРОСУ: «{safe_q}»</b>",
+        "uk": f"🔍 <b>НАЙНИЖЧІ ЦІНИ: «{safe_q}»</b>",
+        "en": f"🔍 <b>LOWEST PRICES: «{safe_q}»</b>",
+        "ru": f"🔍 <b>ЛУЧШИЕ ЦЕНЫ: «{safe_q}»</b>",
     }.get(lang, "")
 
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
     rows: list[str] = []
     for idx, off in enumerate(offers[:6], start=1):
-        mp_label = format_marketplace_label(off.marketplace)
-        short_t = truncate_title(off.title, max_len=46)
+        mp_short = format_marketplace_name(off.marketplace)
+        short_t = truncate_title(off.title, max_len=34)
         price_fmt = fmt_money_with_uah(off.price, off.currency)
         old_part = ""
         if off.old_price and off.old_price > off.price:
@@ -953,25 +958,28 @@ def render_search_results_card(
             old_part = f" <s>{fmt_money(off.old_price, off.currency)}</s> (<code>-{pct}%</code>)"
 
         avail_icon = "🟢" if getattr(off, "is_available", True) else "🔴 Снайпер"
-        crown = "🏆 <b>НАЙДЕШЕВШЕ</b> · " if (idx == 1 and len(offers) > 1 and lang == "uk") else (
-            "🏆 <b>LOWEST</b> · " if (idx == 1 and len(offers) > 1) else ""
+        medal = medals.get(idx, "🔹")
+        best_tag = (
+            " 🏆 <b>НАЙДЕШЕВШЕ</b>"
+            if (idx == 1 and len(offers) > 1 and lang == "uk")
+            else (" 🏆 <b>LOWEST</b>" if (idx == 1 and len(offers) > 1) else "")
         )
         rows.append(
-            f"{crown}<b>#{idx}.</b> {mp_label} ({avail_icon}) — <code>{price_fmt}</code>{old_part}\n"
-            f"   📦 <a href=\"{html.escape(off.url)}\">{short_t}</a>"
+            f"{medal} <b>#{idx} · <code>{price_fmt}</code></b>{old_part}{best_tag}\n"
+            f"└ 🏪 <b>{mp_short}</b> {avail_icon} · <a href=\"{html.escape(off.url)}\">{short_t}</a>"
         )
 
     footer = {
-        "uk": "👇 <i>Натисніть «➕ Стежити» нижче, щоб додати товар у відстеження в 1 клік:</i>",
-        "en": "👇 <i>Tap '➕ Track' below to start monitoring any offer in 1 click:</i>",
-        "ru": "👇 <i>Нажмите «➕ Следить» ниже, чтобы добавить товар в 1 клик:</i>",
+        "uk": "👇 <i>Натисніть на товар нижче, щоб відстежувати ціну в 1 клік:</i>",
+        "en": "👇 <i>Tap any offer below to start tracking in 1 click:</i>",
+        "ru": "👇 <i>Нажмите на товар ниже, чтобы отслеживать цену в 1 клик:</i>",
     }.get(lang, "")
 
     text = (
         f"{header}\n"
-        "──────────────────────────────────\n"
+        "──────────────────────\n"
         + "\n\n".join(rows)
-        + f"\n──────────────────────────────────\n{footer}"
+        + f"\n──────────────────────\n{footer}"
     )
     return text, build_search_results_keyboard(offers, lang=lang)
 
@@ -1014,15 +1022,15 @@ async def render_shared_wishlist_card(
         total_now_uah += to_uah(cur, p.currency)
         total_min_uah += to_uah(mn, p.currency)
 
-        mp_label = format_marketplace_label(p.marketplace)
-        short_t = truncate_title(p.title, max_len=44)
+        mp_short = format_marketplace_name(p.marketplace)
+        short_t = truncate_title(p.title, max_len=34)
         cat_badge = format_category_badge(getattr(sub, "category_tag", None), lang)
         cat_str = f" · {cat_badge}" if cat_badge else ""
         price_str = fmt_money_with_uah(cur, p.currency) if cur > 0 else "🟢 Снайпер наявності"
 
         rows.append(
-            f"<b>{idx}.</b> {mp_label}{cat_str} — <code>{price_str}</code>\n"
-            f"   📦 <a href=\"{html.escape(p.url)}\">{short_t}</a>"
+            f"<b>#{idx} · <code>{price_str}</code></b> · 🏪 <b>{mp_short}</b>{cat_str}\n"
+            f"└ <a href=\"{html.escape(p.url)}\">{short_t}</a>"
         )
 
     potential_save_uah = max(Decimal("0"), total_now_uah - total_min_uah)
@@ -1212,20 +1220,19 @@ async def render_top_drops_card(
         score = quant.deal_score
 
         rank_prefix = f"{medals.get(idx, '🔥')} <b>#{idx}</b>"
-        mp_label = format_marketplace_label(p.marketplace)
+        mp_short = format_marketplace_name(p.marketplace)
         user_tag = tracked_tag_map.get(lang, "") if is_user_tracked else ""
-        short_title = truncate_title(p.title, max_len=46)
+        short_title = truncate_title(p.title, max_len=34)
 
         badge = (
-            f"🟢 <code>{fmt_money(new_p, p.currency)}</code> "
+            f"<b><code>{fmt_money(new_p, p.currency)}</code></b> "
             f"<s>{fmt_money(old_p, p.currency)}</s> "
-            f"🔥 <b>−{pct:.0f}%</b> (<code>−{fmt_money(drop_abs, p.currency)}</code>)"
+            f"(<code>−{pct:.0f}%</code>)"
         )
 
         rows.append(
-            f"{rank_prefix} · {mp_label}{user_tag}\n"
-            f"📦 <a href=\"{html.escape(p.url)}\">{short_title}</a>\n"
-            f"   {badge} · ⚖️ <code>{score}/100</code>"
+            f"{rank_prefix} · {badge} · ⚖️ <code>{score}/100</code>\n"
+            f"└ 🏪 <b>{mp_short}</b>{user_tag} · <a href=\"{html.escape(p.url)}\">{short_title}</a>"
         )
 
     hint = {
@@ -1277,14 +1284,14 @@ async def render_quick_compare_card(
         av = sum(prices) / Decimal(len(prices))
         score = compute_deal_score(current_price=cur, min_30d=mn, max_30d=mx, avg_30d=av, old_price=mx)
 
-        mp_label = format_marketplace_label(p.marketplace)
-        short_title = truncate_title(p.title, max_len=42)
-        crown = "🏆 <b>НАЙКРАЩА ЦІНА</b> · " if (lang == "uk" and sub.id == best_sub.id and len(sorted_subs) > 1) else (
-            "🏆 <b>BEST PRICE</b> · " if sub.id == best_sub.id and len(sorted_subs) > 1 else ""
+        mp_short = format_marketplace_name(p.marketplace)
+        short_title = truncate_title(p.title, max_len=34)
+        crown = " 🏆 <b>НАЙКРАЩА ЦІНА</b>" if (lang == "uk" and sub.id == best_sub.id and len(sorted_subs) > 1) else (
+            " 🏆 <b>BEST PRICE</b>" if sub.id == best_sub.id and len(sorted_subs) > 1 else ""
         )
         rows.append(
-            f"{crown}<b>{idx}.</b> {mp_label} — <code>{fmt_money(cur, p.currency)}</code>\n"
-            f"   📦 <a href=\"{html.escape(p.url)}\">{short_title}</a> · ⚖️ <code>{score}/100</code>"
+            f"<b>#{idx} · <code>{fmt_money_with_uah(cur, p.currency)}</code></b> · ⚖️ <code>{score}/100</code>{crown}\n"
+            f"└ 🏪 <b>{mp_short}</b> · <a href=\"{html.escape(p.url)}\">{short_title}</a>"
         )
 
     text = f"{header}\n──────────────────────────────────\n" + "\n\n".join(rows)
@@ -1388,8 +1395,8 @@ async def render_my_tracking_text_and_kb(
     rows: list[str] = []
     for idx, sub in enumerate(page_subs, start=start_idx + 1):
         p = sub.product
-        mp_label = format_marketplace_label(p.marketplace)
-        title_escaped = truncate_title(p.title, max_len=44)
+        mp_short = format_marketplace_name(p.marketplace)
+        title_escaped = truncate_title(p.title, max_len=34)
         cur = Decimal(str(p.current_price))
         is_avail = getattr(p, "is_available", True) and cur > Decimal("0")
         cat_badge = format_category_badge(getattr(sub, "category_tag", None), lang)
@@ -1402,8 +1409,8 @@ async def render_my_tracking_text_and_kb(
                 "ru": "🟢 <b>Снайпер наличия</b> (ждём поставку)",
             }.get(lang, "")
             rows.append(
-                f"<b>{idx}.</b> {mp_label}{cat_part} — <a href=\"{html.escape(p.url)}\">{title_escaped}</a>\n"
-                f"   {sniper_str}"
+                f"<b>#{idx} ·</b> {sniper_str}\n"
+                f"└ 🏪 <b>{mp_short}</b>{cat_part} · <a href=\"{html.escape(p.url)}\">{title_escaped}</a>"
             )
             continue
 
@@ -1412,9 +1419,9 @@ async def render_my_tracking_text_and_kb(
 
         if mx > cur:
             pct = max(1, int(round((float(mx - cur) / max(0.01, float(mx))) * 100)))
-            price_str = f"🟢 <code>{fmt_money_with_uah(cur, p.currency)}</code> <s>{fmt_money(mx, p.currency)}</s> (<code>-{pct}%</code>)"
+            price_str = f"🟢 <b><code>{fmt_money_with_uah(cur, p.currency)}</code></b> <s>{fmt_money(mx, p.currency)}</s> (<code>-{pct}%</code>)"
         else:
-            price_str = f"💰 <code>{fmt_money_with_uah(cur, p.currency)}</code>"
+            price_str = f"💰 <b><code>{fmt_money_with_uah(cur, p.currency)}</code></b>"
 
         target_badge = ""
         if sub.target_price is not None:
@@ -1423,8 +1430,8 @@ async def render_my_tracking_text_and_kb(
             target_badge = f" · 🎯 <code>{fmt_money(tgt_dec, p.currency)}</code>{reached}"
 
         rows.append(
-            f"<b>{idx}.</b> {mp_label}{cat_part} — <a href=\"{html.escape(p.url)}\">{title_escaped}</a>\n"
-            f"   {price_str}{target_badge}"
+            f"<b>#{idx} ·</b> {price_str}{target_badge}\n"
+            f"└ 🏪 <b>{mp_short}</b>{cat_part} · <a href=\"{html.escape(p.url)}\">{title_escaped}</a>"
         )
 
     sniper_part = f" · 🟢 Снайпер: <code>{sniper_count}</code>" if sniper_count > 0 else ""
