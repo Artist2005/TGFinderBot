@@ -17,11 +17,11 @@ class Settings(BaseSettings):
     # --- Telegram Bot ---
     bot_token: SecretStr = Field(..., alias="BOT_TOKEN", description="Токен Telegram-бота від @BotFather")
 
-    # --- Database (PostgreSQL Async) ---
+    # --- Database (SQLite by default or PostgreSQL Async) ---
     database_url: str = Field(
-        ...,
+        default="sqlite+aiosqlite:///./price_tracker.db",
         alias="DATABASE_URL",
-        description="DSN підключення до PostgreSQL (postgresql+asyncpg://user:pass@host:port/db)",
+        description="DSN підключення до БД (sqlite+aiosqlite:///./price_tracker.db або postgresql+asyncpg://...)",
     )
     db_echo: bool = Field(default=False, alias="DB_ECHO")
     db_pool_size: int = Field(default=10, alias="DB_POOL_SIZE")
