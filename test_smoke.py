@@ -174,10 +174,8 @@ async def run_smoke_tests(custom_url: str | None = None) -> None:
         )
         top_text, top_kb = await render_top_drops_card(session, user)
         cmp_text, cmp_kb = await render_quick_compare_card(session, user)
-        dnd_state = await crud.toggle_user_dnd(session, user.id)
-        notify_state = await crud.toggle_user_notifications(session, user.id)
-        user.dnd_enabled = dnd_state
-        user.notifications_enabled = notify_state
+        user = await crud.toggle_user_dnd(session, user.id)
+        user = await crud.toggle_user_notifications(session, user.id)
         reply_kb = build_main_reply_keyboard("uk", items_count=subs_count)
         prod_kb = build_product_card_keyboard(
             product_id=product.id,

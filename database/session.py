@@ -110,6 +110,21 @@ async def init_db() -> None:
                             "ALTER TABLE products ADD COLUMN requires_verification BOOLEAN DEFAULT FALSE NOT NULL"
                         )
                     )
+                if "is_available" not in prod_cols:
+                    sync_conn.execute(
+                        text(
+                            "ALTER TABLE products ADD COLUMN is_available BOOLEAN DEFAULT TRUE NOT NULL"
+                        )
+                    )
+
+            if insp.has_table("user_products"):
+                up_cols = {col["name"] for col in insp.get_columns("user_products")}
+                if "category_tag" not in up_cols:
+                    sync_conn.execute(
+                        text(
+                            "ALTER TABLE user_products ADD COLUMN category_tag VARCHAR(32) DEFAULT NULL"
+                        )
+                    )
 
         await conn.run_sync(_migrate_columns)
 

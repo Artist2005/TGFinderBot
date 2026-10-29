@@ -64,6 +64,7 @@ from bot.handlers import setup_routers
 from bot.middlewares import DbSessionMiddleware
 from config import settings
 from database.session import close_db, init_db
+from services.currency import ensure_nbu_rates
 from services.scheduler import PriceCheckScheduler
 from services.scraper import scraper_service
 
@@ -163,10 +164,11 @@ async def main() -> None:
 
     dp = Dispatcher(storage=MemoryStorage())
 
-    # Реєстрація Middleware сесій бази даних для всіх типів оновлень (включно з платежами)
+    # Реєстрація Middleware сесій бази даних для всіх типів оновлень (включно з платежами та inline-режимом)
     db_middleware = DbSessionMiddleware()
     dp.message.middleware(db_middleware)
     dp.callback_query.middleware(db_middleware)
+    dp.inline_query.middleware(db_middleware)
     dp.pre_checkout_query.middleware(db_middleware)
 
     # Підключення роутерів
@@ -177,6 +179,7 @@ async def main() -> None:
     try:
         logger.info("Ініціалізація бази даних та сервісів...")
         await init_db()
+        await ensure_nbu_rates()
         await scraper_service.start()
         scheduler.start()
         await set_bot_commands(bot)

@@ -22,11 +22,14 @@ from bot.keyboards.callbacks import (
     LanguageCallback,
     OnboardingCallback,
     ProductActionCallback,
+    SearchCallback,
     SettingsCallback,
+    WishlistCallback,
 )
 from bot.keyboards.inline import (
     build_add_guide_keyboard,
     build_analytics_keyboard,
+    build_category_picker_keyboard,
     build_clear_confirm_keyboard,
     build_delete_confirm_keyboard,
     build_language_keyboard,
@@ -38,6 +41,7 @@ from bot.keyboards.inline import (
     build_settings_keyboard,
     build_start_keyboard,
     build_target_price_presets_keyboard,
+    format_category_badge,
 )
 from bot.keyboards.reply import build_main_reply_keyboard
 from config import settings
@@ -60,6 +64,7 @@ from services.analytics import (
 )
 from services.chart_engine import generate_price_chart
 from services.scraper import format_marketplace_label, scraper_service
+from services.search import get_cached_search_offer
 
 router = Router(name="callbacks_router")
 
@@ -250,11 +255,11 @@ async def handle_onboarding_callback(
         await _smart_render(
             callback,
             render_dashboard_card(db_user, items_count=items_count),
-            reply_markup=build_start_keyboard(lang),
+            reply_markup=build_start_keyboard(lang, items_count=items_count),
         )
         return
 
-    if action == "add_guide":
+    if action in {"add_guide", "search_prompt"}:
         await callback.answer()
         await _smart_render(
             callback,
@@ -449,9 +454,10 @@ async def _render_product_card_view(
         currency=prod_with_hist.currency,
         current_price=cur_dec,
         old_price=inferred_old_price,
-        is_available=True,
+        is_available=getattr(prod_with_hist, "is_available", True),
         history_prices=history_prices,
         target_price=sub.target_price if sub else None,
+        category_tag=getattr(sub, "category_tag", None) if sub else None,
         status_header=status_header or default_header,
         lang=lang,
     )
@@ -462,10 +468,213 @@ async def _render_product_card_view(
         marketplace=prod_with_hist.marketplace,
         title=prod_with_hist.title,
         price_str=fmt_money(cur_dec, prod_with_hist.currency),
+        category_tag=getattr(sub, "category_tag", None) if sub else None,
         lang=lang,
         show_back=True,
     )
     return caption, kb
+
+
+@router.callback_query(SearchCallback.filter())
+async def handle_search_callback(
+    callback: CallbackQuery,
+    callback_data: SearchCallback,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    """
+    Обробляє 1-клік додавання товару з результатів текстового пошуку за назвою («➕ Стежити»).
+    """
+    lang = db_user.language
+    if callback.message is None:
+        await callback.answer()
+        return
+
+    if callback_data.action == "prompt":
+        await callback.answer()
+        await _smart_render(
+            callback,
+            render_add_product_guide_card(lang),
+            reply_markup=build_add_guide_keyboard(lang),
+        )
+        return
+
+    if callback_data.action == "track":
+        offer = get_cached_search_offer(callback_data.token)
+        if offer is None:
+            msg = {
+                "uk": "⏳ Результати пошуку застаріли. Просто напишіть назву товару в чат ще раз!",
+                "en": "⏳ Search results expired. Type the product name in chat again!",
+                "ru": "⏳ Результаты поиска устарели. Напишите название товара в чат ещё раз!",
+            }.get(lang, "")
+            await callback.answer(msg, show_alert=True)
+            return
+
+        current_count = await crud.count_user_subscriptions(session, db_user.id)
+        max_allowed = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
+        if current_count >= max_allowed:
+            await callback.answer(
+                f"⚠️ Ліміт тарифу ({max_allowed}). Перейдіть на ⭐️ PRO!",
+                show_alert=True,
+            )
+            return
+
+        await callback.answer("➕ Додаю у відстеження...")
+        product = await crud.upsert_product_with_initial_history(
+            session,
+            clean_url=offer.url,
+            title=offer.title,
+            image_url=offer.image_url,
+            price=offer.price,
+            currency=offer.currency,
+            marketplace=offer.marketplace,
+            old_price=offer.old_price,
+            is_available=offer.is_available,
+        )
+        await crud.subscribe_user_to_product(session, user_id=db_user.id, product_id=product.id)
+
+        rendered = await _render_product_card_view(
+            session,
+            db_user,
+            product.id,
+            status_header=t("status_tracking_on", lang),
+        )
+        if rendered:
+            caption, kb = rendered
+            await _smart_render(callback, caption, reply_markup=kb)
+
+
+@router.callback_query(WishlistCallback.filter())
+async def handle_wishlist_callback(
+    callback: CallbackQuery,
+    callback_data: WishlistCallback,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    """
+    Обробляє розумні добірки / вішлісти («💻 Збірка ПК», «🎁 Подарунки»):
+    - вибір категорії для товару (pick)
+    - збереження категорії (set)
+    - фільтрація списку «📦 Мої товари» за категорією (filter)
+    - шеринг вішліста з друзями (share)
+    """
+    lang = db_user.language
+    action = callback_data.action
+    product_id = callback_data.product_id
+    tag = callback_data.tag
+
+    if callback.message is None:
+        await callback.answer()
+        return
+
+    if action == "pick":
+        sub = await crud.get_user_subscription(session, db_user.id, product_id)
+        if sub is None:
+            await crud.subscribe_user_to_product(session, db_user.id, product_id)
+            sub = await crud.get_user_subscription(session, db_user.id, product_id)
+        current_tag = getattr(sub, "category_tag", None) if sub else None
+        await callback.answer("📁")
+        hdr = {
+            "uk": (
+                "📁 <b>РОЗУМНІ ДОБІРКИ · ВІШЛІСТИ</b>\n"
+                "──────────────────────────────────\n"
+                "Оберіть добірку для цього товару. Бот автоматично порахує загальну вартість усього списку сьогодні та скільки ви зекономите на мінімумі цін:"
+            ),
+            "en": (
+                "📁 <b>SMART WISHLISTS & COLLECTIONS</b>\n"
+                "──────────────────────────────────\n"
+                "Choose a collection for this item. The bot will calculate total list value today vs 30-day lows:"
+            ),
+            "ru": (
+                "📁 <b>УМНЫЕ ПОДБОРКИ · ВИШЛИСТЫ</b>\n"
+                "──────────────────────────────────\n"
+                "Выберите подборку для этого товара. Бот посчитает общую стоимость списка сегодня и экономию на минимумах:"
+            ),
+        }.get(lang, "")
+        await _smart_render(
+            callback,
+            hdr,
+            reply_markup=build_category_picker_keyboard(product_id, current_tag=current_tag, lang=lang),
+        )
+        return
+
+    if action == "set":
+        new_tag = None if tag == "none" else tag
+        await crud.subscribe_user_to_product(session, db_user.id, product_id)
+        await crud.update_subscription_category(session, db_user.id, product_id, new_tag)
+        badge = format_category_badge(new_tag, lang) if new_tag else (
+            {"uk": "Без категорії", "en": "No category", "ru": "Без категории"}.get(lang, "")
+        )
+        await callback.answer(f"📁 {badge}")
+        rendered = await _render_product_card_view(
+            session,
+            db_user,
+            product_id,
+            status_header=f"📁 <b>Додано у добірку:</b> {badge}",
+        )
+        if rendered:
+            caption, kb = rendered
+            await _smart_render(callback, caption, reply_markup=kb)
+        return
+
+    if action == "filter":
+        await callback.answer("📁")
+        text, kb = await render_my_tracking_text_and_kb(
+            session,
+            db_user,
+            page=1,
+            category_tag=None if tag == "all" else tag,
+        )
+        await _smart_render(callback, text, reply_markup=kb)
+        return
+
+    if action == "share":
+        await callback.answer("📤")
+        bot_username = "PriceTrackerBot"
+        if callback.bot:
+            try:
+                me = await callback.bot.get_me()
+                if me.username:
+                    bot_username = me.username
+            except Exception:
+                pass
+        share_url = f"https://t.me/{bot_username}?start=wishlist_{db_user.id}"
+        from urllib.parse import quote
+        from aiogram.types import InlineKeyboardButton
+        share_tg = f"https://t.me/share/url?url={quote(share_url)}&text={quote('🎁 Мій вішліст товарів зі знижками у Price Tracker:')}"
+        msg = {
+            "uk": (
+                "📤 <b>ПОДІЛИТИСЯ ВІШЛІСТОМ З ДРУЗЯМИ</b>\n"
+                "──────────────────────────────────\n"
+                f"🔗 <b>Ваше посилання на вішліст:</b>\n<code>{share_url}</code>\n\n"
+                "✨ Друг зможе переглянути всі ваші товари, актуальні ціни, загальну суму кошика та додати будь-який товар собі в 1 клік!"
+            ),
+            "en": (
+                "📤 <b>SHARE WISHLIST WITH FRIENDS</b>\n"
+                "──────────────────────────────────\n"
+                f"🔗 <b>Your wishlist link:</b>\n<code>{share_url}</code>\n\n"
+                "✨ Friends can view your items, live prices, total cart value and copy any item in 1 click!"
+            ),
+            "ru": (
+                "📤 <b>ПОДЕЛИТЬСЯ ВИШЛИСТОМ С ДРУЗЬЯМИ</b>\n"
+                "──────────────────────────────────\n"
+                f"🔗 <b>Ваша ссылка на вишлист:</b>\n<code>{share_url}</code>\n\n"
+                "✨ Друг увидит ваш список товаров, актуальные цены, общую сумму и сможет добавить любой товар в 1 клик!"
+            ),
+        }.get(lang, "")
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="📲 Надіслати вішліст другу", url=share_tg)],
+                [
+                    InlineKeyboardButton(
+                        text="⬅️ До списку",
+                        callback_data=OnboardingCallback(action="my_tracking", page=1).pack(),
+                    )
+                ],
+            ]
+        )
+        await _smart_render(callback, msg, reply_markup=kb)
+        return
 
 
 @router.callback_query(ProductActionCallback.filter())

@@ -26,9 +26,25 @@ class OnboardingCallback(CallbackData, prefix="onb"):
         "top_drops_refresh",
         "compare",
         "add_guide",
+        "search_prompt",
         "admin_check_now",
     ]
     page: int = 1
+
+
+class SearchCallback(CallbackData, prefix="srch"):
+    """CallbackData для живого пошуку товарів за назвою (без посилання) та додавання в 1 клік."""
+
+    action: Literal["prompt", "track"]
+    token: str = ""
+
+
+class WishlistCallback(CallbackData, prefix="wl"):
+    """CallbackData для розумних добірок / вішлістів (категорії товарів та спільний доступ)."""
+
+    action: Literal["pick", "set", "filter", "share"]
+    product_id: int = 0
+    tag: str = ""
 
 
 class SettingsCallback(CallbackData, prefix="cfg"):

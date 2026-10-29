@@ -560,10 +560,12 @@ async def upsert_product_with_initial_history(
     currency: str,
     marketplace: str,
     old_price: Decimal | None = None,
+    is_available: bool = True,
 ) -> Product:
     """
     Створює новий товар у БД разом із ретроспективною історією цін за останні 30 днів (1 місяць)
     до початку відстеження, або оновлює існуючий товар.
+    Підтримує збереження товарів «Немає в наявності» (`is_available=False`) для режиму «Снайпер наявності».
     """
     now = datetime.now(timezone.utc)
     product = await get_product_with_url_and_history(session, clean_url)
@@ -573,82 +575,86 @@ async def upsert_product_with_initial_history(
             url=clean_url,
             title=title[:512],
             image_url=image_url,
-            current_price=price,
+            current_price=price if price >= Decimal("0") else Decimal("0.00"),
             currency=currency,
             marketplace=marketplace,
+            is_available=bool(is_available),
             requires_verification=False,
             last_checked_at=now,
         )
         session.add(product)
         await session.flush()
 
-        # Генеруємо компактну історію цін за минулий місяць (30 днів, 10 точок) для економії пам'яті БД
-        month_points = generate_past_month_history(
-            clean_url=clean_url,
-            current_price=price,
-            old_price=old_price,
-            days=30,
-            points_count=10,
-            now=now,
-        )
-        for pt_time, pt_price in month_points:
-            session.add(
-                PriceHistory(
-                    product_id=product.id,
-                    price=pt_price,
-                    timestamp=pt_time,
-                )
+        if price > Decimal("0"):
+            # Генеруємо компактну історію цін за минулий місяць (30 днів, 10 точок) для економії пам'яті БД
+            month_points = generate_past_month_history(
+                clean_url=clean_url,
+                current_price=price,
+                old_price=old_price,
+                days=30,
+                points_count=10,
+                now=now,
             )
+            for pt_time, pt_price in month_points:
+                session.add(
+                    PriceHistory(
+                        product_id=product.id,
+                        price=pt_price,
+                        timestamp=pt_time,
+                    )
+                )
 
         await session.commit()
         await session.refresh(product)
         return product
 
-    existing_max = max(
-        (Decimal(str(h.price)) for h in product.price_history if Decimal(str(h.price)) > Decimal("0")),
-        default=Decimal("0"),
-    )
-    needs_sale_backfill = (
-        old_price is not None
-        and old_price > price * Decimal("1.015")
-        and existing_max < old_price * Decimal("0.98")
-    )
-
-    # Якщо у раніше створеного товару була коротка або стара синтетична історія — оновлюємо 30-денну ретроспективу
-    if len(product.price_history) <= 10 or (len(product.price_history) <= 18 and needs_sale_backfill):
-        await session.execute(delete(PriceHistory).where(PriceHistory.product_id == product.id))
-        month_points = generate_past_month_history(
-            clean_url=clean_url,
-            current_price=price,
-            old_price=old_price,
-            days=30,
-            points_count=10,
-            now=now,
+    if price > Decimal("0"):
+        existing_max = max(
+            (Decimal(str(h.price)) for h in product.price_history if Decimal(str(h.price)) > Decimal("0")),
+            default=Decimal("0"),
         )
-        for pt_time, pt_price in month_points:
-            session.add(
-                PriceHistory(
-                    product_id=product.id,
-                    price=pt_price,
-                    timestamp=pt_time,
-                )
+        needs_sale_backfill = (
+            old_price is not None
+            and old_price > price * Decimal("1.015")
+            and existing_max < old_price * Decimal("0.98")
+        )
+
+        # Якщо у раніше створеного товару була коротка або стара синтетична історія — оновлюємо 30-денну ретроспективу
+        if len(product.price_history) <= 10 or (len(product.price_history) <= 18 and needs_sale_backfill):
+            await session.execute(delete(PriceHistory).where(PriceHistory.product_id == product.id))
+            month_points = generate_past_month_history(
+                clean_url=clean_url,
+                current_price=price,
+                old_price=old_price,
+                days=30,
+                points_count=10,
+                now=now,
             )
-    else:
-        price_changed = Decimal(str(product.current_price)) != Decimal(str(price))
-        if price_changed:
-            session.add(
-                PriceHistory(
-                    product_id=product.id,
-                    price=price,
-                    timestamp=now,
+            for pt_time, pt_price in month_points:
+                session.add(
+                    PriceHistory(
+                        product_id=product.id,
+                        price=pt_price,
+                        timestamp=pt_time,
+                    )
                 )
-            )
+        else:
+            price_changed = Decimal(str(product.current_price)) != Decimal(str(price))
+            if price_changed:
+                session.add(
+                    PriceHistory(
+                        product_id=product.id,
+                        price=price,
+                        timestamp=now,
+                    )
+                )
+        product.current_price = price
 
     product.title = title[:512]
     if image_url:
         product.image_url = image_url
-    product.current_price = price
     product.currency = currency
+    product.is_available = bool(is_available)
     product.requires_verification = False
     product.last_checked_at = now
 
@@ -715,6 +721,43 @@ async def update_target_price(
     await session.commit()
     await session.refresh(sub)
     return sub
+
+
+async def update_subscription_category(
+    session: AsyncSession,
+    user_id: int,
+    product_id: int,
+    category_tag: str | None,
+) -> UserProduct | None:
+    """Встановлює або змінює тег списку/вішлісту (`category_tag`) для підписки користувача."""
+    sub = await get_user_subscription(session, user_id, product_id)
+    if sub is None:
+        return None
+    sub.category_tag = category_tag
+    await session.commit()
+    await session.refresh(sub)
+    return sub
+
+
+async def search_products_in_db(
+    session: AsyncSession,
+    query: str,
+    limit: int = 8,
+) -> Sequence[Product]:
+    """Шукає товари у локальній БД за назвою або маркетплейсом (для Inline-режиму та швидкого пошуку)."""
+    clean_q = (query or "").strip()
+    stmt = select(Product).options(selectinload(Product.price_history))
+    if clean_q:
+        tokens = [t for t in re.split(r"\s+", clean_q) if len(t) >= 2][:4]
+        for tok in tokens:
+            stmt = stmt.where(Product.title.ilike(f"%{tok}%"))
+    stmt = stmt.order_by(Product.last_checked_at.desc()).limit(limit)
+    result = await session.execute(stmt)
+    return [
+        p
+        for p in result.scalars().all()
+        if not _is_fake_or_test_product(p.url, p.title)
+    ]
 
 
 async def _delete_orphan_products(session: AsyncSession) -> int:
@@ -789,7 +832,9 @@ async def cleanup_database_storage(
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
     old_hist_res = await session.execute(
-        delete(PriceHistory).where(PriceHistory.timestamp < cutoff)
+        delete(PriceHistory)
+        .where(PriceHistory.timestamp < cutoff)
+        .execution_options(synchronize_session=False)
     )
     pruned_history = int(old_hist_res.rowcount or 0)
     pruned_products = await _delete_orphan_products(session)
@@ -977,20 +1022,36 @@ async def record_checked_price(
     new_price: Decimal,
     new_title: str | None = None,
     new_image_url: str | None = None,
+    *,
+    is_available: bool = True,
 ) -> bool:
     """
-    Оновлює current_price та last_checked_at у Product із захистом від аномалій (Sanity Check):
-    - Відсікає нульові/від'ємні ціни (new_price <= 0).
+    Оновлює current_price, is_available та last_checked_at у Product із захистом від аномалій (Sanity Check):
+    - Відсікає нульові/від'ємні ціни (new_price <= 0), якщо товар нібито в наявності.
+    - Якщо товар тимчасово відсутній (`is_available=False`), оновлює статус наявності без помилки.
     - Якщо нова ціна впала більш ніж на 90% за один раз (підозра на збій верстки/валюти) —
       позначає товар прапорцем `requires_verification = True` і НЕ перезаписує ціну,
       щоб не розсилати хибні алерти про "знижку 99%".
-    Повертає True, якщо ціна валідна і перевірка пройшла успішно, або False, якщо виявлено аномалію.
+    Повертає True, якщо перевірка пройшла успішно, або False, якщо виявлено аномалію.
     """
     now = datetime.now(timezone.utc)
     old_price = Decimal(str(product.current_price))
     new_price_dec = Decimal(str(new_price))
 
     product.last_checked_at = now
+
+    if not is_available:
+        product.is_available = False
+        if new_title:
+            product.title = new_title[:512]
+        if new_image_url:
+            product.image_url = new_image_url
+        if new_price_dec > Decimal("0") and (
+            old_price <= Decimal("0") or new_price_dec >= (old_price * ANOMALOUS_DROP_RATIO)
+        ):
+            product.current_price = new_price_dec
+        await session.commit()
+        return True
 
     if new_price_dec <= Decimal("0"):
         logger.warning(
@@ -1021,6 +1082,7 @@ async def record_checked_price(
     if new_image_url:
         product.image_url = new_image_url
 
+    product.is_available = True
     product.requires_verification = False
 
     if new_price_dec != old_price:

@@ -458,16 +458,17 @@ class UniversalMarketplaceScraper(BaseScraper):
                 availability = str(offers.get("availability") or "").lower()
                 is_available = "outofstock" not in availability and "soldout" not in availability
 
-                if title and price is not None:
+                if title and (price is not None or not is_available):
+                    eff_price = price if price is not None else Decimal("0.00")
                     return ScrapedProduct(
                         url=url,
                         title=title,
-                        price=price,
+                        price=eff_price,
                         currency=currency,
                         image_url=image_url,
                         marketplace=marketplace,
                         is_available=is_available,
-                        old_price=high_price if (high_price and high_price > price) else None,
+                        old_price=high_price if (high_price and eff_price > 0 and high_price > eff_price) else None,
                     )
         return None
 
@@ -583,6 +584,25 @@ class UniversalMarketplaceScraper(BaseScraper):
             elif old_price == price:
                 old_price = None
 
+        avail_meta = soup.find("meta", attrs={"property": "product:availability"}) or soup.find(
+            "meta", attrs={"property": "og:availability"}
+        )
+        avail_str = str(avail_meta.get("content") or "").lower() if avail_meta else ""
+        page_low = html_text[:60000].lower()
+        out_markers = (
+            "немає в наявності",
+            "товар закінчився",
+            "нет в наличии",
+            "currently unavailable",
+            "out of stock",
+            "outofstock",
+        )
+        is_available = "out" not in avail_str and not (
+            price is None and any(m in page_low for m in out_markers)
+        )
+        if not is_available and title and price is None:
+            price = Decimal("0.00")
+
         if not title or price is None:
             raise ParsingStructureError(
                 f"Не вдалося визначити ціну товару на сторінці ({marketplace}). "
@@ -598,7 +618,7 @@ class UniversalMarketplaceScraper(BaseScraper):
             currency=currency,
             image_url=image_url,
             marketplace=marketplace,
-            is_available=True,
+            is_available=is_available,
             old_price=old_price,
         )
 

@@ -77,6 +77,12 @@ class Product(Base):
     current_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), default="UAH", server_default="UAH", nullable=False)
     marketplace: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    is_available: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default="true",
+        nullable=False,
+    )
     requires_verification: Mapped[bool] = mapped_column(
         Boolean,
         default=False,
@@ -128,6 +134,7 @@ class UserProduct(Base):
         nullable=False,
     )
     target_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    category_tag: Mapped[str | None] = mapped_column(String(32), default=None, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -19,7 +19,12 @@ from config import settings
 from database import crud
 from database.models import Product, User
 from database.session import get_db_session
-from services.analytics import build_daily_digest_card, build_price_drop_alert_card
+from services.analytics import (
+    build_back_in_stock_alert_card,
+    build_daily_digest_card,
+    build_price_drop_alert_card,
+)
+from services.currency import ensure_nbu_rates
 from services.scraper.exceptions import ScraperError
 from services.scraper.manager import scraper_service
 
@@ -181,8 +186,9 @@ class PriceCheckScheduler:
                 logger.warning("Не вдалося надіслати ранковий дайджест користувачу %d: %s", user_id, exc)
 
     async def cleanup_expired_pro(self) -> None:
-        """Деактивує прострочені Pro-підписки та очищує застарілі дані в локальній БД."""
+        """Деактивує прострочені Pro-підписки, оновлює курс НБУ та очищує застарілі дані в локальній БД."""
         try:
+            await ensure_nbu_rates()
             async with get_db_session() as session:
                 expired_count = await crud.expire_overdue_pro_subscriptions(session)
                 if expired_count > 0:
@@ -266,8 +272,19 @@ class PriceCheckScheduler:
                 return
 
             if not scraped.is_available or scraped.price <= Decimal("0"):
+                async with get_db_session() as session:
+                    product = await crud.get_product_with_subscribers_by_id(session, product_id)
+                    if product is not None and getattr(product, "is_available", True):
+                        await crud.record_checked_price(
+                            session=session,
+                            product=product,
+                            new_price=Decimal(str(product.current_price)),
+                            new_title=scraped.title,
+                            new_image_url=scraped.image_url,
+                            is_available=False,
+                        )
                 logger.debug(
-                    "Товар ID=%d тимчасово відсутній або ціна некоректна (%s), пропускаємо алерт.",
+                    "Товар ID=%d тимчасово відсутній або ціна некоректна (%s), чекаємо появи в наявності.",
                     product_id,
                     scraped.price,
                 )
@@ -278,6 +295,7 @@ class PriceCheckScheduler:
                 if product is None:
                     return
 
+                was_available = bool(getattr(product, "is_available", True))
                 old_price = Decimal(str(product.current_price))
                 new_price = Decimal(str(scraped.price))
 
@@ -287,19 +305,69 @@ class PriceCheckScheduler:
                     new_price=new_price,
                     new_title=scraped.title,
                     new_image_url=scraped.image_url,
+                    is_available=True,
                 )
 
                 # Якщо ціна була визнана аномальною (наприклад, падіння >90% через баг сайту) — не шлемо хибний алерт
                 if not is_valid:
                     return
 
-                if new_price < old_price:
+                # 🟢 СНАЙПЕР НАЯВНОСТІ: товар був відсутній (або з ціною 0) і щойно з'явився в продажу!
+                if not was_available or old_price <= Decimal("0"):
+                    await self._dispatch_back_in_stock_alerts(
+                        product=product,
+                        new_price=new_price,
+                        only_pro_tier=only_pro_tier,
+                    )
+                elif new_price < old_price:
                     await self._dispatch_price_drop_alerts(
                         product=product,
                         old_price=old_price,
                         new_price=new_price,
                         only_pro_tier=only_pro_tier,
                     )
+
+    async def _dispatch_back_in_stock_alerts(
+        self,
+        *,
+        product: Product,
+        new_price: Decimal,
+        only_pro_tier: bool,
+    ) -> None:
+        """Миттєво надсилає тривогу «🚨 ТОВАР З'ЯВИВСЯ В НАЯВНОСТІ!» підписникам Снайпера наявності."""
+        for sub in product.subscribers:
+            user = sub.user
+            if user is None:
+                continue
+            if only_pro_tier and not user.has_active_pro:
+                continue
+            if not getattr(user, "notifications_enabled", True):
+                continue
+
+            lang = normalize_lang(user.language)
+            text = build_back_in_stock_alert_card(
+                title=product.title,
+                marketplace=product.marketplace,
+                currency=product.currency,
+                new_price=new_price,
+                lang=lang,
+            )
+            kb = build_price_alert_keyboard(
+                product_id=product.id,
+                product_url=product.url,
+                user_id=user.id,
+                marketplace=product.marketplace,
+                title=product.title,
+                new_price_str=fmt_money(new_price, product.currency),
+                old_price_str="",
+                lang=lang,
+            )
+            await self._send_safe_alert(
+                user_id=user.id,
+                text=text,
+                image_url=product.image_url,
+                reply_markup=kb,
+            )
 
     async def _dispatch_price_drop_alerts(
         self,

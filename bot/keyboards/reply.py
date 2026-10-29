@@ -23,6 +23,9 @@ ALL_BTN_ADD_PRODUCT = all_btn_variants("btn_add_product") | {
     "➕ Добавить ссылку",
     "➕ Add Product",
     "➕ Добавить товар",
+    "🔍 Знайти / Додати",
+    "🔍 Search / Add",
+    "🔍 Найти / Добавить",
 }
 ALL_BTN_ANALYTICS = all_btn_variants("btn_analytics") | {
     "📊 Аналітика та економія",
@@ -63,15 +66,15 @@ def build_main_reply_keyboard(
     my_items_label = f"{base_my_items} ({items_count})" if items_count is not None else base_my_items
 
     if lang == "en":
-        add_label = "➕ Add Link"
+        add_label = "🔍 Search / Add"
         pro_label = "⭐️ PRO Access"
         settings_label = "⚙️ Settings"
     elif lang == "ru":
-        add_label = "➕ Добавить ссылку"
+        add_label = "🔍 Найти / Добавить"
         pro_label = "⭐️ PRO-доступ"
         settings_label = "⚙️ Настройки"
     else:
-        add_label = "➕ Додати посилання"
+        add_label = "🔍 Знайти / Додати"
         pro_label = "⭐️ PRO-доступ"
         settings_label = "⚙️ Налаштування"
 

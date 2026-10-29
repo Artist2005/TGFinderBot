@@ -192,16 +192,17 @@ class RozetkaScraper(BaseScraper):
                     if status:
                         is_available = status in {"available", "limited", "active"}
 
-            if title and price is not None:
-                if old_price is not None and old_price > 0:
-                    if old_price < price:
-                        price, old_price = old_price, price
-                    elif old_price == price:
+            if title and (price is not None or not is_available):
+                effective_price = price if price is not None else Decimal("0.00")
+                if old_price is not None and old_price > 0 and effective_price > 0:
+                    if old_price < effective_price:
+                        effective_price, old_price = old_price, effective_price
+                    elif old_price == effective_price:
                         old_price = None
                 return ScrapedProduct(
                     url=canonical_url,
                     title=title,
-                    price=price,
+                    price=effective_price,
                     currency="UAH",
                     image_url=image_url,
                     marketplace=self.marketplace_name,
@@ -360,8 +361,8 @@ class RozetkaScraper(BaseScraper):
         out_of_stock_markers = ("немає в наявності", "закінчився", "знято з виробництва", "нет в наличии")
         is_available = not any(marker in status_text for marker in out_of_stock_markers)
 
-        if not is_available and price is None:
-            raise ProductOutOfStockError(f"Товар «{title or canonical_url}» відсутній у наявності, ціна недоступна.")
+        if not is_available and title and price is None:
+            price = Decimal("0.00")
 
         if not title or price is None:
             raise ParsingStructureError(
@@ -390,8 +391,6 @@ class RozetkaScraper(BaseScraper):
         if goods_id:
             api_product = await self._try_internal_api(goods_id, url)
             if api_product is not None:
-                if not api_product.is_available and api_product.price <= 0:
-                    raise ProductOutOfStockError(f"Товар «{api_product.title}» немає в наявності.")
                 return api_product
 
         # Крок 2: Завантаження HTML-сторінки товару

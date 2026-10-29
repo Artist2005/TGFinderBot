@@ -16,6 +16,7 @@ from bot.keyboards.inline import (
     build_marketplaces_keyboard,
     build_price_alert_keyboard,
     build_pro_offer_keyboard,
+    build_product_card_keyboard,
     build_referral_keyboard,
     build_settings_keyboard,
     build_start_keyboard,
@@ -36,6 +37,7 @@ from database import crud
 from database.models import User
 from services.analytics import (
     build_price_drop_alert_card,
+    build_product_caption_with_30d_stats,
     generate_user_csv_report,
     render_add_product_guide_card,
     render_dashboard_card,
@@ -43,6 +45,7 @@ from services.analytics import (
     render_pro_offer_card,
     render_quick_compare_card,
     render_settings_card,
+    render_shared_wishlist_card,
     render_top_drops_card,
     render_user_stats_text,
 )
@@ -98,6 +101,66 @@ async def cmd_start(
     limit = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
     tier_badge = "⭐️ PRO" if db_user.has_active_pro else "Free"
 
+    # Deep-link: Спільний вішліст друга (/start wishlist_<owner_id>)
+    if args.startswith("wishlist_"):
+        raw_owner = args.removeprefix("wishlist_").strip()
+        if raw_owner.isdigit():
+            owner_id = int(raw_owner)
+            w_text, w_kb = await render_shared_wishlist_card(session, owner_id, viewer_lang=lang)
+            await message.answer(
+                t("start_welcome", lang, tier=tier_badge, limit=limit),
+                reply_markup=build_main_reply_keyboard(lang, items_count=items_count),
+            )
+            await message.answer(w_text, reply_markup=w_kb)
+            return
+
+    # Deep-link: Підписка на товар із Inline-картки в чаті (/start track_<product_id>)
+    if args.startswith("track_"):
+        raw_pid = args.removeprefix("track_").strip()
+        if raw_pid.isdigit():
+            pid = int(raw_pid)
+            prod_with_hist = await crud.get_product_with_history(session, pid)
+            if prod_with_hist is not None:
+                if items_count < limit:
+                    sub, _ = await crud.subscribe_user_to_product(session, db_user.id, pid)
+                    items_count = await crud.count_user_subscriptions(session, db_user.id)
+                else:
+                    sub = await crud.get_user_subscription(session, db_user.id, pid)
+                cur_dec = Decimal(str(prod_with_hist.current_price))
+                history_prices = (
+                    [Decimal(str(h.price)) for h in prod_with_hist.price_history]
+                    if prod_with_hist.price_history
+                    else [cur_dec]
+                )
+                caption = build_product_caption_with_30d_stats(
+                    title=prod_with_hist.title,
+                    marketplace=prod_with_hist.marketplace,
+                    currency=prod_with_hist.currency,
+                    current_price=cur_dec,
+                    is_available=getattr(prod_with_hist, "is_available", True),
+                    history_prices=history_prices,
+                    target_price=sub.target_price if sub else None,
+                    category_tag=getattr(sub, "category_tag", None) if sub else None,
+                    status_header=t("status_tracking_on", lang),
+                    lang=lang,
+                )
+                kb = build_product_card_keyboard(
+                    product_id=prod_with_hist.id,
+                    clean_url=prod_with_hist.url,
+                    user_id=db_user.id,
+                    marketplace=prod_with_hist.marketplace,
+                    title=prod_with_hist.title,
+                    price_str=fmt_money(cur_dec, prod_with_hist.currency),
+                    category_tag=getattr(sub, "category_tag", None) if sub else None,
+                    lang=lang,
+                )
+                await message.answer(
+                    t("start_welcome", lang, tier=tier_badge, limit=limit),
+                    reply_markup=build_main_reply_keyboard(lang, items_count=items_count),
+                )
+                await message.answer(caption, reply_markup=kb)
+                return
+
     text = t("start_welcome", lang, tier=tier_badge, limit=limit)
     await message.answer(
         text,
@@ -105,7 +168,7 @@ async def cmd_start(
     )
     await message.answer(
         render_dashboard_card(db_user, items_count=items_count),
-        reply_markup=build_start_keyboard(lang),
+        reply_markup=build_start_keyboard(lang, items_count=items_count),
     )
 
 
@@ -289,7 +352,7 @@ async def btn_help_info(
     items_count = await crud.count_user_subscriptions(session, db_user.id)
     await message.answer(
         render_dashboard_card(db_user, items_count=items_count),
-        reply_markup=build_start_keyboard(lang),
+        reply_markup=build_start_keyboard(lang, items_count=items_count),
     )
 
 

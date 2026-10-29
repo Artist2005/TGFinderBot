@@ -7,11 +7,28 @@ import re
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQuery,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    Message,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.i18n import fmt_money, t
+from bot.i18n import fmt_money, fmt_money_with_uah, t
 from bot.keyboards.inline import build_pro_offer_keyboard, build_product_card_keyboard
+from bot.keyboards.reply import (
+    ALL_BTN_ADD_PRODUCT,
+    ALL_BTN_ANALYTICS,
+    ALL_BTN_HELP,
+    ALL_BTN_LANGUAGE,
+    ALL_BTN_MARKETPLACES,
+    ALL_BTN_MY_PRODUCTS,
+    ALL_BTN_PRO_TARIFF,
+    ALL_BTN_SETTINGS,
+)
 from config import settings
 from database import crud
 from database.models import User
@@ -20,6 +37,7 @@ from services.analytics import (
     compute_deal_score,
     render_my_tracking_text_and_kb,
     render_pro_offer_card,
+    render_search_results_card,
 )
 from services.scraper import (
     InvalidUrlError,
@@ -33,6 +51,7 @@ from services.scraper import (
     normalize_url,
     scraper_service,
 )
+from services.search import search_products_by_name
 
 router = Router(name="links_router")
 
@@ -260,6 +279,7 @@ async def handle_product_link(
         currency=scraped.currency,
         marketplace=scraped.marketplace,
         old_price=scraped.old_price,
+        is_available=scraped.is_available,
     )
     sub, is_new_sub = await crud.subscribe_user_to_product(
         session,
@@ -274,8 +294,15 @@ async def handle_product_link(
         else [Decimal(str(product.current_price))]
     )
 
-    sub_status = t("status_tracking_on", lang) if is_new_sub else t("status_tracking_updated", lang)
     cur_dec = Decimal(str(product.current_price))
+    if not scraped.is_available or cur_dec <= Decimal("0"):
+        sub_status = {
+            "uk": "🎯 <b>Режим «Снайпер наявності» увімкнено!</b>",
+            "en": "🎯 <b>Back-in-Stock Sniper Activated!</b>",
+            "ru": "🎯 <b>Режим «Снайпер наличия» включён!</b>",
+        }.get(lang, t("status_tracking_on", lang))
+    else:
+        sub_status = t("status_tracking_on", lang) if is_new_sub else t("status_tracking_updated", lang)
 
     caption = build_product_caption_with_30d_stats(
         title=product.title,
@@ -286,6 +313,7 @@ async def handle_product_link(
         is_available=scraped.is_available,
         history_prices=history_prices,
         target_price=sub.target_price,
+        category_tag=getattr(sub, "category_tag", None),
         status_header=sub_status,
         lang=lang,
     )
@@ -298,7 +326,177 @@ async def handle_product_link(
         title=product.title,
         price_str=fmt_money(cur_dec, product.currency),
         old_price_str=fmt_money(scraped.old_price, product.currency) if scraped.old_price else "",
+        category_tag=getattr(sub, "category_tag", None),
         lang=lang,
     )
 
     await status_msg.edit_text(caption, reply_markup=kb)
+
+
+# Множина всіх відомих текстів кнопок меню, які не повинні запускати пошук товарів
+_ALL_MENU_BUTTON_TEXTS = (
+    ALL_BTN_ADD_PRODUCT
+    | ALL_BTN_ANALYTICS
+    | ALL_BTN_HELP
+    | ALL_BTN_LANGUAGE
+    | ALL_BTN_MARKETPLACES
+    | ALL_BTN_MY_PRODUCTS
+    | ALL_BTN_PRO_TARIFF
+    | ALL_BTN_SETTINGS
+    | {"🏪 Маркетплейси", "📊 Статистика та знижки", "ℹ️ Як це працює", "⭐️ Тариф PRO"}
+)
+
+
+@router.inline_query()
+async def handle_inline_query(
+    inline_query: InlineQuery,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    """
+    💬 КІЛЕР-ФІЧА #4: Вірусний Inline-режим (@BotName запит) для будь-яких чатів та груп.
+    Дозволяє миттєво знайти товар і відправити в чат красиву картку з ціною, Deal Score
+    та прямою кнопкою «📉 Відстежувати ціну в боті».
+    """
+    lang = db_user.language
+    query = (inline_query.query or "").strip()
+
+    bot_username = "PriceTrackerBot"
+    if inline_query.bot:
+        try:
+            me = await inline_query.bot.get_me()
+            if me.username:
+                bot_username = me.username
+        except Exception:
+            pass
+
+    results: list[InlineQueryResultArticle] = []
+
+    if len(query) >= 2:
+        offers = await search_products_by_name(session, query, limit=8)
+    else:
+        # Якщо користувач просто ввів @BotName без тексту — показуємо гарячі знижки з БД
+        db_prods = await crud.search_products_in_db(session, "a", limit=6)
+        if not db_prods:
+            drops = await crud.get_top_price_drops(session, user_id=db_user.id, limit=5, force_live=False)
+            db_prods = [d["product"] for d in drops]
+        from services.search import _cache_offer, SearchOffer
+        offers = [
+            _cache_offer(
+                SearchOffer(
+                    token="",
+                    title=p.title,
+                    url=p.url,
+                    price=Decimal(str(p.current_price)),
+                    old_price=None,
+                    currency=p.currency,
+                    marketplace=p.marketplace,
+                    is_available=getattr(p, "is_available", True),
+                    image_url=p.image_url,
+                    product_id=p.id,
+                )
+            )
+            for p in db_prods[:6]
+        ]
+
+    for idx, off in enumerate(offers[:8], start=1):
+        mp_label = format_marketplace_label(off.marketplace)
+        price_fmt = fmt_money_with_uah(off.price, off.currency)
+        old_part = ""
+        if off.old_price and off.old_price > off.price:
+            pct = max(1, int(round(float((off.old_price - off.price) / off.old_price) * 100)))
+            old_part = f" <s>{fmt_money(off.old_price, off.currency)}</s> (<code>-{pct}%</code>)"
+
+        score = compute_deal_score(
+            current_price=off.price,
+            min_30d=off.price * Decimal("0.95"),
+            max_30d=off.old_price or (off.price * Decimal("1.10")),
+            avg_30d=off.price,
+            old_price=off.old_price,
+        )
+
+        deep_link = (
+            f"https://t.me/{bot_username}?start=track_{off.product_id}"
+            if off.product_id
+            else f"https://t.me/{bot_username}?start=ref_{db_user.id}"
+        )
+        btn_track_lbl = {
+            "uk": "📉 Відстежувати ціну в боті",
+            "en": "📉 Track Price in Bot",
+            "ru": "📉 Отслеживать цену в боте",
+        }.get(lang, "📉 Відстежувати ціну в боті")
+        btn_store_lbl = {
+            "uk": "🛒 Відкрити в магазині",
+            "en": "🛒 Open in Store",
+            "ru": "🛒 Открыть в магазине",
+        }.get(lang, "🛒 Відкрити в магазині")
+
+        msg_text = (
+            f"🛍 <b>{html.escape(off.title[:85])}</b>\n"
+            f"──────────────────────────────────\n"
+            f"🏪 <b>Магазин:</b> {mp_label}\n"
+            f"💰 <b>Ціна зараз:</b> <code>{price_fmt}</code>{old_part}\n"
+            f"⚖️ <b>Deal Score:</b> <code>{score}/100</code>\n"
+            f"──────────────────────────────────\n"
+            f"🤖 <i>Знайдено через @{bot_username} — розумний моніторинг знижок 24/7</i>"
+        )
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=btn_track_lbl, url=deep_link)],
+                [InlineKeyboardButton(text=btn_store_lbl, url=off.url)],
+            ]
+        )
+
+        results.append(
+            InlineQueryResultArticle(
+                id=f"offer_{idx}_{off.token}",
+                title=f"{price_fmt} · {off.title[:48]}",
+                description=f"{mp_label} · Deal Score: {score}/100 · Натисніть, щоб надіслати в чат",
+                thumbnail_url=off.image_url if (off.image_url and off.image_url.startswith("http")) else None,
+                input_message_content=InputTextMessageContent(
+                    message_text=msg_text,
+                    parse_mode="HTML",
+                    disable_web_page_preview=False,
+                ),
+                reply_markup=kb,
+            )
+        )
+
+    await inline_query.answer(results, cache_time=60, is_personal=True)
+
+
+@router.message(F.text)
+async def handle_text_product_search(
+    message: Message,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    """
+    🔍 КІЛЕР-ФІЧА #1: Пошук найнижчої ціни просто за назвою товару (без посилання!).
+    Користувач пише у чат текст (наприклад, «AirPods Pro 2» або «PlayStation 5 Slim»),
+    бот паралельно шукає пропозиції в магазинах і видає порівняльну таблицю з кнопками «➕ Стежити».
+    """
+    raw_text = (message.text or "").strip()
+    if not raw_text or raw_text.startswith("/"):
+        return
+    if raw_text in _ALL_MENU_BUTTON_TEXTS or raw_text.startswith(("📦 Мої товари", "📦 My Items", "📦 Мои товары")):
+        return
+    if "http://" in raw_text or "https://" in raw_text:
+        return
+
+    lang = db_user.language
+    query = " ".join(raw_text.split())
+    if len(query) < 2 or len(query) > 120:
+        return
+
+    searching_txt = {
+        "uk": f"🔍 <b>Шукаю найнижчі ціни на «{html.escape(query[:45])}» у магазинах...</b>",
+        "en": f"🔍 <b>Searching lowest prices for «{html.escape(query[:45])}»...</b>",
+        "ru": f"🔍 <b>Ищу самые низкие цены на «{html.escape(query[:45])}» в магазинах...</b>",
+    }.get(lang, "")
+
+    status_msg = await message.answer(searching_txt)
+    offers = await search_products_by_name(session, query, limit=6)
+    text, kb = render_search_results_card(query, offers, lang=lang)
+    await status_msg.edit_text(text, reply_markup=kb, disable_web_page_preview=True)

@@ -49,6 +49,20 @@ def fmt_money(value: Decimal | float | int, currency: str = "UAH") -> str:
     return f"{num_str} {sym}"
 
 
+def fmt_money_with_uah(value: Decimal | float | int, currency: str = "UAH") -> str:
+    """
+    Форматує грошову суму та для іноземних валют ($ / € / zł / £) автоматично додає
+    еквівалент у гривні за курсом НБУ: напр. '$149.00 (~6 190 ₴)'.
+    """
+    base = fmt_money(value, currency)
+    curr = (currency or "UAH").strip().upper()
+    if curr == "UAH":
+        return base
+    from services.currency import format_uah_equivalent
+
+    return f"{base}{format_uah_equivalent(value, curr)}"
+
+
 class _SafeFormatDict(dict[str, object]):
     """Безпечний словник форматування, який не викликає KeyError на відсутніх плейсхолдерах."""
 

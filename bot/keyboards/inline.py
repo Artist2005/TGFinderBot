@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 import math
-from typing import Sequence
+from typing import Any, Sequence
 from urllib.parse import quote
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -14,7 +14,9 @@ from bot.keyboards.callbacks import (
     OnboardingCallback,
     ProductActionCallback,
     ProPaymentCallback,
+    SearchCallback,
     SettingsCallback,
+    WishlistCallback,
 )
 from config import settings
 from database.models import User, UserProduct
@@ -22,6 +24,25 @@ from services.affiliate import build_affiliate_url
 from services.scraper.normalizer import format_marketplace_name
 
 ITEMS_PER_PAGE = 6
+
+WISHLIST_CATEGORIES: dict[str, dict[str, str]] = {
+    "pc": {"uk": "💻 Збірка ПК", "en": "💻 PC Build", "ru": "💻 Сборка ПК"},
+    "gadgets": {"uk": "📱 Гаджети", "en": "📱 Gadgets", "ru": "📱 Гаджеты"},
+    "gifts": {"uk": "🎁 Подарунки", "en": "🎁 Gifts", "ru": "🎁 Подарки"},
+    "home": {"uk": "🏠 Для дому", "en": "🏠 Home", "ru": "🏠 Для дома"},
+    "hunt": {"uk": "🔥 Полювання", "en": "🔥 Deal Hunt", "ru": "🔥 Охота"},
+}
+
+
+def format_category_badge(tag: str | None, lang: str = "uk") -> str:
+    """Повертає локалізовану назву категорії вішліста (добірки) або порожній рядок."""
+    if not tag:
+        return ""
+    lang = normalize_lang(lang)
+    cat = WISHLIST_CATEGORIES.get(tag)
+    if not cat:
+        return ""
+    return cat.get(lang, cat["uk"])
 
 
 def _short_price(val: Decimal | float, currency: str = "UAH") -> str:
@@ -56,49 +77,70 @@ def _build_viral_share_query(
     return f"🔥 Вигідна ціна в {store_name}: {short_t}{p_part}{old_part}! Відстежуй знижки 24/7: {ref_url}"
 
 
-def build_start_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
+def build_start_keyboard(lang: str = "uk", items_count: int = 0) -> InlineKeyboardMarkup:
     """
-    Зрозуміла симетрична інлайн-клавіатура головного дашборду (/start).
-    Усі кнопки 2-колонкової сітки мають довжину до 12 символів і рівну ширину з постом.
+    Прогресивна інлайн-клавіатура головного дашборду (/start):
+    - Для нового користувача (items_count == 0) показує лише 4 найважливіші кнопки (2 ряди),
+      щоб не перевантажувати інтерфейс.
+    - Коли з'являються товари (items_count > 0), автоматично відкриває кнопки кошика та вигоди.
     """
     lang = normalize_lang(lang)
     if lang == "en":
-        my_items = "📦 My Items"
-        add_how = "➕ Add Item"
+        my_items = f"📦 My Items ({items_count})" if items_count > 0 else "📦 My Items"
+        search_btn = "🔍 Search by Name"
         hot_label = "🔥 Hot Deals"
         stats_label = "📊 My Savings"
-        cmp_label = "⚖️ Compare"
-        stores_label = "🏬 Stores"
         pro_label = "⭐️ PRO Plan"
         cfg_label = "⚙️ Settings"
     elif lang == "ru":
-        my_items = "📦 Мои товары"
-        add_how = "➕ Как начать"
+        my_items = f"📦 Мои товары ({items_count})" if items_count > 0 else "📦 Мои товары"
+        search_btn = "🔍 Найти по названию"
         hot_label = "🔥 Топ скидок"
-        stats_label = "📊 Экономия"
-        cmp_label = "⚖️ Сравнить"
-        stores_label = "🏬 Магазины"
+        stats_label = "📊 Моя выгода"
         pro_label = "⭐️ PRO тариф"
         cfg_label = "⚙️ Настройки"
     else:
-        my_items = "📦 Мої товари"
-        add_how = "➕ Як додати"
+        my_items = f"📦 Мої товари ({items_count})" if items_count > 0 else "📦 Мої товари"
+        search_btn = "🔍 Знайти за назвою"
         hot_label = "🔥 Топ знижок"
         stats_label = "📊 Моя вигода"
-        cmp_label = "⚖️ Порівняти"
-        stores_label = "🏬 Магазини"
         pro_label = "⭐️ PRO тариф"
         cfg_label = "⚙️ Опції бота"
 
     builder = InlineKeyboardBuilder()
+    if items_count <= 0:
+        # Мінімалістичний режим для нових користувачів (4 кнопки = 0 візуального шуму)
+        builder.row(
+            InlineKeyboardButton(
+                text=search_btn,
+                callback_data=OnboardingCallback(action="search_prompt").pack(),
+            ),
+            InlineKeyboardButton(
+                text=hot_label,
+                callback_data=SettingsCallback(action="top_drops").pack(),
+            ),
+        )
+        builder.row(
+            InlineKeyboardButton(
+                text=pro_label,
+                callback_data=OnboardingCallback(action="pro_menu").pack(),
+            ),
+            InlineKeyboardButton(
+                text=cfg_label,
+                callback_data=OnboardingCallback(action="settings").pack(),
+            ),
+        )
+        return builder.as_markup()
+
+    # Розширений режим для активних користувачів із товарами (3 охайні ряди)
     builder.row(
         InlineKeyboardButton(
             text=my_items,
             callback_data=OnboardingCallback(action="my_tracking", page=1).pack(),
         ),
         InlineKeyboardButton(
-            text=add_how,
-            callback_data=OnboardingCallback(action="add_guide").pack(),
+            text=search_btn,
+            callback_data=OnboardingCallback(action="search_prompt").pack(),
         ),
     )
     builder.row(
@@ -109,16 +151,6 @@ def build_start_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text=stats_label,
             callback_data=OnboardingCallback(action="stats").pack(),
-        ),
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text=cmp_label,
-            callback_data=SettingsCallback(action="compare").pack(),
-        ),
-        InlineKeyboardButton(
-            text=stores_label,
-            callback_data=OnboardingCallback(action="marketplaces").pack(),
         ),
     )
     builder.row(
@@ -135,19 +167,28 @@ def build_start_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
 
 
 def build_add_guide_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
-    """Клавіатура інтерактивної підказки «➕ Як додати товар»."""
+    """Клавіатура інтерактивної підказки «🔍 Як знайти або додати товар»."""
     lang = normalize_lang(lang)
     if lang == "en":
+        inline_btn = "💬 Try in Chat (@Bot)"
         stores_btn = "🏬 Stores"
         menu_btn = "🏠 Main Menu"
     elif lang == "ru":
+        inline_btn = "💬 Поиск в чате (@Bot)"
         stores_btn = "🏬 Магазины"
         menu_btn = "🏠 В меню"
     else:
+        inline_btn = "💬 Пошук у чаті (@Bot)"
         stores_btn = "🏬 Магазини"
         menu_btn = "🏠 У меню"
 
     builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=inline_btn,
+            switch_inline_query_current_chat="AirPods Pro 2",
+        )
+    )
     builder.row(
         InlineKeyboardButton(
             text=stores_btn,
@@ -300,13 +341,14 @@ def build_product_card_keyboard(
     price_str: str | None = None,
     new_price_str: str | None = None,
     old_price_str: str | None = None,
+    category_tag: str | None = None,
 ) -> InlineKeyboardMarkup:
     """
     Зрозуміла симетрична сітка кнопок для картки товару:
     Ряд 1 (1 кнопка Full-width CTA): [🛒 Купити в Store · 1 499 ₴ ↗]
-    Ряд 2 (2 кнопки Medium):         [📈 Графік 30д] | [🎯 Моя ціль]
-    Ряд 3 (4 кнопки Quick Target):   [🎯-5%] | [🎯-10%] | [🎯-15%] | [✍️]
-    Ряд 4 (2 кнопки Medium):         [🔄 Перевірити] | [🗑 Видалити]
+    Ряд 2 (2 кнопки Medium):         [📈 Графік 30д] | [🧠 AI-Прогноз]
+    Ряд 3 (4 кнопки Quick Target):   [🎯-5%] | [🎯-10%] | [🎯-15%] | [✍️ Ціль]
+    Ряд 4 (3 кнопки Compact):        [🔄 Оновити] | [📁 Добірка] | [🗑 Видалити]
     Ряд 5 (2 кнопки Навігація):      [📤 Поділитися] | [⬅️ До списку]
     """
     lang = normalize_lang(lang)
@@ -325,12 +367,15 @@ def build_product_card_keyboard(
         lang=lang,
     )
 
+    cat_badge = format_category_badge(category_tag, lang)
+
     if lang == "en":
         cta_label = f"🛒 Open {store_name}{price_suffix} ↗"
         chart_label = "📈 30d Chart"
         ai_label = "🧠 AI Advice"
         custom_lbl = "✍️ Target"
-        refresh_label = "🔄 Check Now"
+        refresh_label = "🔄 Refresh"
+        cat_label = cat_badge or "📁 List"
         del_label = "🗑 Remove"
         share_short = "📤 Share"
         back_label = "⬅️ My Items"
@@ -339,7 +384,8 @@ def build_product_card_keyboard(
         chart_label = "📈 График 30д"
         ai_label = "🧠 AI-Прогноз"
         custom_lbl = "✍️ Цель"
-        refresh_label = "🔄 Проверить"
+        refresh_label = "🔄 Обновить"
+        cat_label = cat_badge or "📁 Список"
         del_label = "🗑 Удалить"
         share_short = "📤 Поделиться"
         back_label = "⬅️ К списку"
@@ -348,7 +394,8 @@ def build_product_card_keyboard(
         chart_label = "📈 Графік 30д"
         ai_label = "🧠 AI-Прогноз"
         custom_lbl = "✍️ Ціль"
-        refresh_label = "🔄 Перевірити"
+        refresh_label = "🔄 Оновити"
+        cat_label = cat_badge or "📁 Добірка"
         del_label = "🗑 Видалити"
         share_short = "📤 Поділитися"
         back_label = "⬅️ До списку"
@@ -400,11 +447,15 @@ def build_product_card_keyboard(
             ).pack(),
         ),
     )
-    # Ряд 4 (2 кнопки однакової ширини: Перевірити | Видалити з підтвердженням)
+    # Ряд 4 (3 кнопки: Оновити | Добірка / Вішліст | Видалити)
     builder.row(
         InlineKeyboardButton(
             text=refresh_label,
             callback_data=ProductActionCallback(action="refresh", product_id=product_id).pack(),
+        ),
+        InlineKeyboardButton(
+            text=cat_label,
+            callback_data=WishlistCallback(action="pick", product_id=product_id).pack(),
         ),
         InlineKeyboardButton(
             text=del_label,
@@ -420,6 +471,54 @@ def build_product_card_keyboard(
         InlineKeyboardButton(
             text=back_label,
             callback_data=OnboardingCallback(action="my_tracking", page=1).pack(),
+        ),
+    )
+    return builder.as_markup()
+
+
+def build_category_picker_keyboard(
+    product_id: int,
+    current_tag: str | None = None,
+    lang: str = "uk",
+) -> InlineKeyboardMarkup:
+    """Клавіатура вибору розумної добірки / вішліста для товару («💻 Збірка ПК», «🎁 Подарунки» тощо)."""
+    lang = normalize_lang(lang)
+    builder = InlineKeyboardBuilder()
+
+    tags_order = ["pc", "gadgets", "gifts", "home", "hunt"]
+    btns: list[InlineKeyboardButton] = []
+    for tag in tags_order:
+        label = format_category_badge(tag, lang)
+        mark = " ✅" if current_tag == tag else ""
+        btns.append(
+            InlineKeyboardButton(
+                text=f"{label}{mark}",
+                callback_data=WishlistCallback(action="set", product_id=product_id, tag=tag).pack(),
+            )
+        )
+
+    builder.row(btns[0], btns[1])
+    builder.row(btns[2], btns[3])
+    builder.row(btns[4])
+
+    clear_lbl = (
+        "🧹 No Category"
+        if lang == "en"
+        else ("🧹 Без подборки" if lang == "ru" else "🧹 Без добірки")
+    )
+    back_lbl = (
+        "⬅️ To Card"
+        if lang == "en"
+        else ("⬅️ К товару" if lang == "ru" else "⬅️ До товару")
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=clear_lbl,
+            callback_data=WishlistCallback(action="set", product_id=product_id, tag="none").pack(),
+        ),
+        InlineKeyboardButton(
+            text=back_lbl,
+            callback_data=ProductActionCallback(action="card", product_id=product_id).pack(),
         ),
     )
     return builder.as_markup()
@@ -869,16 +968,48 @@ def build_tracking_list_keyboard(
     user_id: int,
     lang: str = "uk",
     page: int = 1,
+    active_tag: str | None = None,
+    all_subscriptions: Sequence[UserProduct] | None = None,
 ) -> InlineKeyboardMarkup:
     """
     Дружня та зрозуміла клавіатура для списку активних підписок («📦 Мої товари»):
     - Кожен товар — це 1 охайна кнопка на всю ширину поста:
       [📦 1. Rozetka · Назва... — 1 499 ₴ 🎯] -> миттєво відкриває картку товару!
-    - Підтримується пагінація (по 6 товарів на сторінку).
-    - Знизу — зрозумілі підписані кнопки дій без загадкових емодзі-рядків.
+    - Якщо користувач створив добірки (💻 Збірка ПК, 🎁 Подарунки), зверху з'являються вкладки фільтрації.
+    - Підтримується пагінація (по 6 товарів на сторінку) та кнопка спільного доступу до вішліста.
     """
     lang = normalize_lang(lang)
     builder = InlineKeyboardBuilder()
+
+    full_subs = list(all_subscriptions) if all_subscriptions is not None else list(subscriptions)
+    used_tags: list[str] = []
+    for s in full_subs:
+        tag_val = getattr(s, "category_tag", None)
+        if tag_val and tag_val in WISHLIST_CATEGORIES and tag_val not in used_tags:
+            used_tags.append(tag_val)
+
+    # Вкладки розумних добірок показуються прогресивно (тільки якщо користувач призначив хоча б 1 категорію)
+    if used_tags:
+        all_lbl = "All" if lang == "en" else ("Все" if lang == "ru" else "Всі")
+        all_mark = "✅ " if not active_tag else ""
+        filter_btns: list[InlineKeyboardButton] = [
+            InlineKeyboardButton(
+                text=f"{all_mark}📂 {all_lbl} ({len(full_subs)})",
+                callback_data=WishlistCallback(action="filter", tag="all").pack(),
+            )
+        ]
+        for t_code in used_tags[:3]:
+            cnt = sum(1 for s in full_subs if getattr(s, "category_tag", None) == t_code)
+            badge = format_category_badge(t_code, lang)
+            mark = "✅ " if active_tag == t_code else ""
+            filter_btns.append(
+                InlineKeyboardButton(
+                    text=f"{mark}{badge} ({cnt})",
+                    callback_data=WishlistCallback(action="filter", tag=t_code).pack(),
+                )
+            )
+        for i in range(0, len(filter_btns), 2):
+            builder.row(*filter_btns[i : i + 2])
 
     total_items = len(subscriptions)
     total_pages = max(1, math.ceil(total_items / ITEMS_PER_PAGE))
@@ -890,12 +1021,20 @@ def build_tracking_list_keyboard(
         product = sub.product
         store_short = format_marketplace_name(product.marketplace)[:10]
         short_title = product.title[:16] + ("…" if len(product.title) > 16 else "")
-        price_str = _short_price(product.current_price, product.currency)
+        is_avail = bool(getattr(product, "is_available", True))
+        if not is_avail or Decimal(str(product.current_price)) <= Decimal("0"):
+            price_str = "🟢 Снайпер" if lang != "en" else "🟢 Sniper"
+        else:
+            price_str = _short_price(product.current_price, product.currency)
         target_mark = " 🎯" if sub.target_price is not None else ""
+        cat_icon = ""
+        sub_tag = getattr(sub, "category_tag", None)
+        if sub_tag and sub_tag in WISHLIST_CATEGORIES and not active_tag:
+            cat_icon = format_category_badge(sub_tag, lang).split(" ")[0] + " "
 
         builder.row(
             InlineKeyboardButton(
-                text=f"📦 {idx}. {store_short} · {short_title} — {price_str}{target_mark}",
+                text=f"📦 {idx}. {cat_icon}{store_short} · {short_title} — {price_str}{target_mark}",
                 callback_data=ProductActionCallback(action="card", product_id=product.id).pack(),
             )
         )
@@ -923,23 +1062,23 @@ def build_tracking_list_keyboard(
     if lang == "en":
         refresh_lbl = "🔄 Check All"
         stats_lbl = "📊 My Savings"
-        cmp_lbl = "⚖️ Compare"
+        share_wl_lbl = "📤 Share Wishlist"
         csv_lbl = "📥 Excel/CSV"
-        add_lbl = "➕ Add Item"
+        add_lbl = "🔍 Search / Add"
         clear_lbl = "🧹 Clear All"
     elif lang == "ru":
         refresh_lbl = "🔄 Обновить"
         stats_lbl = "📊 Экономия"
-        cmp_lbl = "⚖️ Сравнить"
+        share_wl_lbl = "📤 Поделиться списком"
         csv_lbl = "📥 Отчёт CSV"
-        add_lbl = "➕ Добавить"
+        add_lbl = "🔍 Найти ещё"
         clear_lbl = "🧹 Очистить"
     else:
         refresh_lbl = "🔄 Оновити всі"
         stats_lbl = "📊 Моя вигода"
-        cmp_lbl = "⚖️ Порівняти"
+        share_wl_lbl = "📤 Поділитися вішлістом"
         csv_lbl = "📥 Звіт Excel"
-        add_lbl = "➕ Додати ще"
+        add_lbl = "🔍 Знайти ще"
         clear_lbl = "🧹 Очистити"
 
     builder.row(
@@ -954,8 +1093,8 @@ def build_tracking_list_keyboard(
     )
     builder.row(
         InlineKeyboardButton(
-            text=cmp_lbl,
-            callback_data=SettingsCallback(action="compare").pack(),
+            text=share_wl_lbl,
+            callback_data=WishlistCallback(action="share", tag=active_tag or "all").pack(),
         ),
         InlineKeyboardButton(
             text=csv_lbl,
@@ -965,11 +1104,94 @@ def build_tracking_list_keyboard(
     builder.row(
         InlineKeyboardButton(
             text=add_lbl,
-            callback_data=OnboardingCallback(action="add_guide").pack(),
+            callback_data=OnboardingCallback(action="search_prompt").pack(),
         ),
         InlineKeyboardButton(
             text=clear_lbl,
             callback_data=OnboardingCallback(action="confirm_clear").pack(),
         ),
+    )
+    return builder.as_markup()
+
+
+def build_search_results_keyboard(
+    offers: Sequence[Any],
+    lang: str = "uk",
+) -> InlineKeyboardMarkup:
+    """
+    Клавіатура результатів швидкого пошуку за назвою товару:
+    Кожна кнопка в 1 клік додає обрану пропозицію у відстеження!
+    """
+    lang = normalize_lang(lang)
+    builder = InlineKeyboardBuilder()
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+    for idx, offer in enumerate(offers[:6], start=1):
+        store_short = format_marketplace_name(getattr(offer, "marketplace", "store"))[:10]
+        title_str = str(getattr(offer, "title", ""))
+        short_title = title_str[:16] + ("…" if len(title_str) > 16 else "")
+        is_avail = bool(getattr(offer, "is_available", True))
+        price_val = getattr(offer, "price", Decimal("0"))
+        curr = str(getattr(offer, "currency", "UAH"))
+        token = str(getattr(offer, "token", ""))
+
+        if not is_avail or Decimal(str(price_val)) <= Decimal("0"):
+            price_badge = "🟢 Снайпер" if lang != "en" else "🟢 Sniper"
+        else:
+            price_badge = _short_price(price_val, curr)
+
+        prefix = medals.get(idx, "➕")
+        track_verb = "Track" if lang == "en" else ("Следить" if lang == "ru" else "Стежити")
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{prefix} #{idx} {track_verb}: {store_short} · {short_title} — {price_badge}",
+                callback_data=SearchCallback(action="track", token=token).pack(),
+            )
+        )
+
+    inline_lbl = (
+        "💬 Share in Chat (@Bot)"
+        if lang == "en"
+        else ("💬 Поделиться в чате" if lang == "ru" else "💬 Надіслати в чат (@Bot)")
+    )
+    menu_lbl = t("ibtn_main_menu", lang)
+    builder.row(
+        InlineKeyboardButton(
+            text=inline_lbl,
+            switch_inline_query=str(getattr(offers[0], "title", ""))[:32] if offers else "",
+        ),
+        InlineKeyboardButton(
+            text=menu_lbl,
+            callback_data=OnboardingCallback(action="main_menu").pack(),
+        ),
+    )
+    return builder.as_markup()
+
+
+def build_shared_wishlist_keyboard(
+    subscriptions: Sequence[UserProduct],
+    lang: str = "uk",
+) -> InlineKeyboardMarkup:
+    """Клавіатура спільного вішліста друга: дозволяє в 1 клік відкрити або додати будь-який товар собі."""
+    lang = normalize_lang(lang)
+    builder = InlineKeyboardBuilder()
+
+    for idx, sub in enumerate(subscriptions[:8], start=1):
+        p = sub.product
+        store_short = format_marketplace_name(p.marketplace)[:10]
+        short_title = p.title[:18] + ("…" if len(p.title) > 18 else "")
+        price_str = _short_price(p.current_price, p.currency)
+        builder.row(
+            InlineKeyboardButton(
+                text=f"➕ #{idx} {store_short} · {short_title} — {price_str}",
+                callback_data=ProductActionCallback(action="card", product_id=p.id).pack(),
+            )
+        )
+
+    builder.row(
+        InlineKeyboardButton(
+            text=t("ibtn_main_menu", lang),
+            callback_data=OnboardingCallback(action="main_menu").pack(),
+        )
     )
     return builder.as_markup()

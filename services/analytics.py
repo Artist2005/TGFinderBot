@@ -10,19 +10,24 @@ from typing import Any, Sequence
 from aiogram.types import BufferedInputFile, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.i18n import fmt_money, normalize_lang, t
+from bot.i18n import fmt_money, fmt_money_with_uah, normalize_lang, t
 from bot.keyboards.inline import (
     ITEMS_PER_PAGE,
+    WISHLIST_CATEGORIES,
     build_add_guide_keyboard,
     build_ai_forecast_keyboard,
     build_pro_offer_keyboard,
+    build_search_results_keyboard,
+    build_shared_wishlist_keyboard,
     build_start_keyboard,
     build_top_drops_keyboard,
     build_tracking_list_keyboard,
+    format_category_badge,
 )
 from config import settings
 from database import crud
 from database.models import Product, User, UserProduct
+from services.currency import to_uah
 from services.scraper.normalizer import format_marketplace_label
 
 
@@ -319,11 +324,49 @@ def compute_deal_score(
 def render_dashboard_card(db_user: User, items_count: int = 0) -> str:
     """
     Єдине зрозуміле вікно головного меню (/start та 🏠 Меню).
-    Показує статус профілю, кількість товарів і просту покрокову інструкцію.
+    Для нового користувача (0 товарів) — максимально легке, дружнє та без візуального перевантаження.
     """
     lang = normalize_lang(db_user.language)
     max_limit = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
     tier = "⭐️ PRO" if db_user.has_active_pro else "Free"
+
+    if items_count == 0:
+        if lang == "en":
+            return (
+                "🛍 <b>PRICE TRACKER · SMART SHOPPING</b>\n"
+                "──────────────────────────────────\n"
+                "👋 <b>Welcome! Adding your first item takes 3 seconds:</b>\n\n"
+                "🔍 <b>Option 1 — Type a product name:</b>\n"
+                "Just write e.g. <code>AirPods Pro 2</code> or <code>PlayStation 5</code> in chat — I'll find the lowest prices!\n\n"
+                "🔗 <b>Option 2 — Paste a store link:</b>\n"
+                "Send any URL from Rozetka, Prom, Comfy, Amazon, eBay, AliExpress, etc.\n"
+                "──────────────────────────────────\n"
+                "👇 <i>Type a product name or paste a link below:</i>"
+            )
+        if lang == "ru":
+            return (
+                "🛍 <b>PRICE TRACKER · УМНЫЙ ПОИСК СКИДОК</b>\n"
+                "──────────────────────────────────\n"
+                "👋 <b>Добро пожаловать! Начать очень просто:</b>\n\n"
+                "🔍 <b>Способ 1 — Просто напишите название товара:</b>\n"
+                "Например: <code>AirPods Pro 2</code> или <code>PlayStation 5</code> — я за 3 секунды сравню цены в магазинах!\n\n"
+                "🔗 <b>Способ 2 — Или отправьте ссылку:</b>\n"
+                "Киньте ссылку из Rozetka, Prom, Comfy, Алло, Эпицентр, OLX, Amazon и др.\n"
+                "──────────────────────────────────\n"
+                "👇 <i>Напишите название товара или вставьте ссылку в чат:</i>"
+            )
+        return (
+            "🛍 <b>PRICE TRACKER · РОЗУМНИЙ МОНІТОРИНГ ЦІН</b>\n"
+            "──────────────────────────────────\n"
+            "👋 <b>Вітаємо! Почати дуже просто (без зайвих налаштувань):</b>\n\n"
+            "🔍 <b>Спосіб 1 — Просто напишіть назву товару:</b>\n"
+            "Наприклад: <code>AirPods Pro 2</code> або <code>PlayStation 5</code> — бот за 3 секунди порівняє ціни в магазинах!\n\n"
+            "🔗 <b>Спосіб 2 — Або киньте посилання:</b>\n"
+            "Надішліть лінк із Rozetka, Prom, Comfy, Алло, Епіцентр, MakeUp, OLX, Amazon тощо.\n"
+            "──────────────────────────────────\n"
+            "👇 <i>Напишіть назву товару в чат або оберіть дію нижче:</i>"
+        )
+
     interval = "12h" if (lang == "en" and db_user.has_active_pro) else (
         "24h" if lang == "en" else (
             "12 год" if (lang == "uk" and db_user.has_active_pro) else (
@@ -338,12 +381,12 @@ def render_dashboard_card(db_user: User, items_count: int = 0) -> str:
             "──────────────────────────────────\n"
             f"👤 <b>Plan:</b> <code>{tier}</code> · 📦 <b>Tracked:</b> <code>{items_count}/{max_limit}</code> · ⏱ <code>{interval}</code>\n"
             "──────────────────────────────────\n"
-            "<b>How it works in 3 simple steps:</b>\n"
-            "1️⃣ <b>Send a link</b> to any item (Amazon, eBay, Rozetka, Prom, etc.).\n"
-            "2️⃣ <b>Check the price:</b> view the 30-day chart & Deal Score.\n"
-            "3️⃣ <b>Save money:</b> get an instant alert when the price drops!\n"
+            "• 🔍 <b>Search by name:</b> just type e.g. <code>iPhone 16</code> in chat\n"
+            "• 🔗 <b>Add by link:</b> paste 1 or up to 10 store URLs\n"
+            "• 🟢 <b>Stock Sniper:</b> paste an out-of-stock link to catch restocks\n"
+            "• 💬 <b>Inline mode:</b> type <code>@bot query</code> in any chat with friends\n"
             "──────────────────────────────────\n"
-            "👇 <b>Paste a product link in chat or choose an action:</b>"
+            "👇 <b>Type a product name, paste a link, or choose an action:</b>"
         )
     if lang == "ru":
         return (
@@ -351,70 +394,67 @@ def render_dashboard_card(db_user: User, items_count: int = 0) -> str:
             "──────────────────────────────────\n"
             f"👤 <b>Тариф:</b> <code>{tier}</code> · 📦 <b>Товаров:</b> <code>{items_count}/{max_limit}</code> · ⏱ <code>{interval}</code>\n"
             "──────────────────────────────────\n"
-            "<b>Как это работает (3 простых шага):</b>\n"
-            "1️⃣ <b>Отправьте ссылку</b> на товар (Rozetka, Prom, Comfy, Amazon и др.).\n"
-            "2️⃣ <b>Оцените выгоду:</b> бот покажет график за 30 дней и индекс выгоды.\n"
-            "3️⃣ <b>Покупайте дешевле:</b> получите уведомление при снижении цены!\n"
+            "• 🔍 <b>Поиск по названию:</b> просто напишите <code>iPhone 16</code> в чат\n"
+            "• 🔗 <b>По ссылке:</b> отправьте от 1 до 10 ссылок на товары\n"
+            "• 🟢 <b>Снайпер наличия:</b> ловим товары, которые раскупили\n"
+            "• 📁 <b>Умные подборки:</b> группируйте товары в вишлисты и делитесь с друзьями\n"
             "──────────────────────────────────\n"
-            "👇 <b>Вставьте ссылку в чат или выберите раздел ниже:</b>"
+            "👇 <b>Напишите название товара, вставьте ссылку или выберите раздел:</b>"
         )
     return (
         "🛍 <b>PRICE TRACKER · РОЗУМНИЙ МОНІТОРИНГ ЦІН</b>\n"
         "──────────────────────────────────\n"
         f"👤 <b>Тариф:</b> <code>{tier}</code> · 📦 <b>Товарів:</b> <code>{items_count}/{max_limit}</code> · ⏱ <code>{interval}</code>\n"
         "──────────────────────────────────\n"
-        "<b>Як це працює (3 прості кроки):</b>\n"
-        "1️⃣ <b>Надішліть посилання</b> на товар (Rozetka, Prom, Comfy, Алло, OLX, Amazon тощо).\n"
-        "2️⃣ <b>Перевірте вигоду:</b> бот покаже графік цін за 30 днів та реальність знижки.\n"
-        "3️⃣ <b>Купуйте дешевше:</b> ми миттєво сповістимо, щойно ціна впаде!\n"
+        "• 🔍 <b>Пошук за назвою:</b> просто напишіть у чат <code>AirPods Pro 2</code>\n"
+        "• 🔗 <b>За посиланням:</b> надішліть від 1 до 10 лінків із будь-якого магазину\n"
+        "• 🟢 <b>Снайпер наявності:</b> сповістимо, щойно розкуплений товар з'явиться!\n"
+        "• 📁 <b>Добірки та Вішлісти:</b> групуйте товари («Збірка ПК») та діліться з друзями\n"
         "──────────────────────────────────\n"
-        "👇 <b>Вставте посилання в чат або оберіть розділ нижче:</b>"
+        "👇 <b>Напишіть назву товару, киньте посилання або оберіть розділ:</b>"
     )
 
 
 def render_add_product_guide_card(lang: str = "uk") -> str:
-    """Дружня покрокова інструкція «➕ Як додати товар» з підтримкою пакетного додавання."""
+    """Дружня покрокова інструкція «🔍 Знайти / Додати товар» (пошук текстом + посилання + снайпер)."""
     lang = normalize_lang(lang)
     if lang == "en":
         return (
-            "➕ <b>HOW TO ADD PRODUCTS</b>\n"
+            "🔍 <b>FIND BY NAME OR ADD BY LINK</b>\n"
             "──────────────────────────────────\n"
-            "1️⃣ Open any store (Amazon, eBay, AliExpress, Rozetka, Comfy, Prom, etc.).\n"
-            "2️⃣ Copy the product link (or tap <b>Share → Telegram</b>).\n"
-            "3️⃣ Send <b>1 or up to 10 links</b> in a single message!\n\n"
-            "✨ <b>What the bot does automatically:</b>\n"
-            "• Builds a <b>30-day price chart</b> & Deal Score\n"
-            "• Gives an <b>🧠 AI Price Forecast</b> (Buy now vs Wait)\n"
-            "• Alerts you the moment the price drops\n"
+            "1️⃣ <b>No link? Just type the product name!</b>\n"
+            "Write e.g. <code>AirPods Pro 2</code>, <code>PlayStation 5 Slim</code> or <code>RTX 4070</code> right here in chat — the bot will compare stores and let you track the lowest price in 1 tap!\n\n"
+            "2️⃣ <b>Have a link? Paste 1 or up to 10 URLs!</b>\n"
+            "Supports Rozetka, Prom, Comfy, Allo, Epicentr, OLX, Amazon, AliExpress ($/€/zł auto-converted to ₴ at NBU rate).\n\n"
+            "3️⃣ <b>🟢 Back-in-Stock Sniper:</b>\n"
+            "Even if an item is sold out, send its link — we'll alert you the second it's back in stock!\n"
             "──────────────────────────────────\n"
-            "👇 <i>Just paste your product link into the chat below!</i>"
+            "👇 <i>Type a product name or paste a link below!</i>"
         )
     if lang == "ru":
         return (
-            "➕ <b>КАК ДОБАВИТЬ ТОВАР В ОТСЛЕЖИВАНИЕ</b>\n"
+            "🔍 <b>ПОИСК ПО НАЗВАНИЮ ИЛИ ССЫЛКЕ</b>\n"
             "──────────────────────────────────\n"
-            "1️⃣ Откройте товар в любом магазине (Rozetka, Prom, Comfy, Алло, Эпицентр, OLX, Amazon, AliExpress и др.).\n"
-            "2️⃣ Скопируйте ссылку (или нажмите <b>«Поделиться» → Telegram</b>).\n"
-            "3️⃣ Отправьте <b>1 или сразу до 10 ссылок</b> одним сообщением!\n\n"
-            "✨ <b>Что сделает бот автоматически:</b>\n"
-            "• Построит <b>график цен за 30 дней</b>\n"
-            "• Даст <b>🧠 AI-Прогноз цены</b> (покупать или ждать)\n"
-            "• Мгновенно сообщит, когда цена упадёт\n"
+            "1️⃣ <b>Нет ссылки под рукой? Просто напишите название!</b>\n"
+            "Напишите в чат, например: <code>AirPods Pro 2</code>, <code>PlayStation 5 Slim</code> или <code>iPhone 16</code> — бот за 3 секунды найдёт самые дешёвые цены в магазинах!\n\n"
+            "2️⃣ <b>Есть ссылка? Отправьте от 1 до 10 ссылок!</b>\n"
+            "Rozetka, Prom, Comfy, Алло, Эпицентр, OLX, Amazon, Allegro ($/€/zł автоматически переводятся в ₴ по курсу НБУ).\n\n"
+            "3️⃣ <b>🟢 «Снайпер наличия»:</b>\n"
+            "Если товар раскупили — всё равно кидайте ссылку! Бот мгновенно пришлёт тревогу, как только он появится.\n"
             "──────────────────────────────────\n"
-            "👇 <i>Просто отправьте ссылку на товар в этот чат!</i>"
+            "👇 <i>Просто напишите название товара или вставьте ссылку в чат!</i>"
         )
     return (
-        "➕ <b>ЯК ДОДАТИ ТОВАР У ВІДСТЕЖЕННЯ</b>\n"
+        "🔍 <b>ПОШУК ЗА НАЗВОЮ АБО ЗА ПОСИЛАННЯМ</b>\n"
         "──────────────────────────────────\n"
-        "1️⃣ Відкрийте товар у будь-якому магазині (Rozetka, Prom, Comfy, Алло, Епіцентр, MakeUp, OLX, Amazon, AliExpress тощо).\n"
-        "2️⃣ Скопіюйте посилання (або натисніть <b>«Поділитися» → Telegram</b>).\n"
-        "3️⃣ Надішліть <b>1 або одразу до 10 посилань</b> одним повідомленням!\n\n"
-        "✨ <b>Що зробить бот автоматично:</b>\n"
-        "• Побудує <b>графік цін за 30 днів</b> та індекс вигоди\n"
-        "• Дасть <b>🧠 AI-Прогноз ціни</b> (купувати зараз чи чекати)\n"
-        "• Сповістить вас, щойно ціна знизиться\n"
+        "1️⃣ <b>Немає посилання? Просто напишіть назву в чат!</b>\n"
+        "Напишіть, наприклад: <code>AirPods Pro 2</code>, <code>PlayStation 5 Slim</code> або <code>iPhone 16</code> — бот за 3 секунди порівняє ціни в магазинах і дасть кнопку «➕ Стежити»!\n\n"
+        "2️⃣ <b>Маєте посилання? Надішліть від 1 до 10 лінків!</b>\n"
+        "Rozetka, Prom, Comfy, Алло, Епіцентр, MakeUp, OLX, Amazon, Allegro (валюти $/€/zł автоматично рахуються в ₴ за курсом НБУ).\n\n"
+        "3️⃣ <b>🟢 «Снайпер наявності»:</b>\n"
+        "Якщо товар розкупили — все одно кидайте посилання! Щойно магазин поверне його в продаж, бот миттєво пришле тривогу.\n"
         "──────────────────────────────────\n"
-        "👇 <i>Просто вставте посилання на товар у цей чат!</i>"
+        "👇 <i>Просто напишіть назву товару або вставте посилання у цей чат!</i>"
     )
 
 
@@ -428,29 +468,59 @@ def build_product_caption_with_30d_stats(
     is_available: bool = True,
     history_prices: Sequence[Decimal | float] | None = None,
     target_price: Decimal | None = None,
+    category_tag: str | None = None,
     status_header: str = "",
     status_line: str = "",
     lang: str = "uk",
 ) -> str:
     """
     UI-шаблон #1: Картка додавання / перегляду товару (Card Layout).
-    Максимально зрозуміла структура з поясненням вигоди, прогресом до бажаної ціни та підказкою дій.
+    Підтримує:
+    - Авто-перерахунок валют у гривню за курсом НБУ ($/€/zł ➔ ~₴)
+    - Режим «🟢 Снайпер наявності» (коли товар розкуплений)
+    - Бейдж розумної добірки / вішлісту (📁 Категорія)
     """
     lang = normalize_lang(lang)
     cur_dec = Decimal(str(current_price))
     cur_f = float(cur_dec)
 
-    prices = [float(p) for p in history_prices] if history_prices else [cur_f]
-    min_30d = Decimal(str(min(prices)))
-    max_30d = Decimal(str(max(prices)))
-    avg_30d = Decimal(str(sum(prices) / len(prices)))
-    start_30d = Decimal(str(prices[0]))
+    valid_prices = [float(p) for p in (history_prices or []) if float(p) > 0]
+    if not valid_prices:
+        valid_prices = [cur_f] if cur_f > 0 else [0.0]
+
+    min_30d = Decimal(str(min(valid_prices)))
+    max_30d = Decimal(str(max(valid_prices)))
+    avg_30d = Decimal(str(sum(valid_prices) / len(valid_prices)))
+    start_30d = Decimal(str(valid_prices[0]))
     curr = currency or "UAH"
 
     mp_label = format_marketplace_label(marketplace)
     short_title = truncate_title(title, max_len=48)
     header_text = status_header or status_line or t("status_tracking_on", lang)
     avail_badge = t("avail_yes", lang) if is_available else t("avail_no", lang)
+
+    cat_badge = format_category_badge(category_tag, lang)
+    cat_part = f" · {cat_badge}" if cat_badge else ""
+
+    if not is_available or cur_dec <= Decimal("0"):
+        sniper_lbl = {
+            "uk": "🎯 <b>Снайпер наявності:</b> <code>АКТИВНИЙ 🟢</code>\n<i>Щойно магазин поверне товар у продаж — бот миттєво надішле вам тривогу!</i>",
+            "en": "🎯 <b>Back-in-Stock Sniper:</b> <code>ACTIVE 🟢</code>\n<i>The second this item returns to stock, you'll get an instant alert!</i>",
+            "ru": "🎯 <b>Снайпер наличия:</b> <code>АКТИВЕН 🟢</code>\n<i>Как только магазин вернёт товар в продажу — бот мгновенно пришлёт тревогу!</i>",
+        }.get(lang, "")
+        last_known = (
+            f"\n💰 <b>Остання відома ціна:</b> <code>{fmt_money_with_uah(cur_dec, curr)}</code>"
+            if cur_dec > Decimal("0")
+            else ""
+        )
+        return (
+            f"{header_text}\n"
+            f"──────────────────────────────────\n"
+            f"📦 <b>{short_title}</b>\n"
+            f"🏪 {mp_label} · {avail_badge}{cat_part}\n\n"
+            f"{sniper_lbl}{last_known}\n"
+            f"──────────────────────────────────"
+        )
 
     # Визначаємо референсну стару ціну для бейджа динаміки
     ref_old = old_price if (old_price and old_price > cur_dec) else start_30d
@@ -461,19 +531,19 @@ def build_product_caption_with_30d_stats(
         lbl = {"uk": "Ціна впала:", "en": "Price dropped:", "ru": "Цена упала:"}.get(lang, "Ціна впала:")
         save_word = {"uk": "вигода", "en": "save", "ru": "выгода"}.get(lang, "вигода")
         price_badge = (
-            f"🟢 <b>{lbl}</b> <code>{fmt_money(cur_dec, curr)}</code> "
+            f"🟢 <b>{lbl}</b> <code>{fmt_money_with_uah(cur_dec, curr)}</code> "
             f"<s>{fmt_money(ref_old, curr)}</s> (<code>-{max(1, pct)}%</code> · {save_word} <code>{fmt_money(diff_val, curr)}</code>)"
         )
-    elif cur_dec > start_30d:
+    elif cur_dec > start_30d and start_30d > Decimal("0"):
         pct = int(round(((cur_f - float(start_30d)) / max(0.01, float(start_30d))) * 100))
         lbl = {"uk": "Ціна піднялася:", "en": "Price rose:", "ru": "Цена выросла:"}.get(lang, "Ціна піднялася:")
         price_badge = (
-            f"🔴 <b>{lbl}</b> <code>{fmt_money(cur_dec, curr)}</code> "
+            f"🔴 <b>{lbl}</b> <code>{fmt_money_with_uah(cur_dec, curr)}</code> "
             f"<s>{fmt_money(start_30d, curr)}</s> (<code>+{max(1, pct)}%</code>)"
         )
     else:
         lbl = {"uk": "Поточна ціна:", "en": "Current price:", "ru": "Текущая цена:"}.get(lang, "Поточна ціна:")
-        price_badge = f"💎 <b>{lbl}</b> <code>{fmt_money(cur_dec, curr)}</code>"
+        price_badge = f"💎 <b>{lbl}</b> <code>{fmt_money_with_uah(cur_dec, curr)}</code>"
 
     # Бейдж історичного мінімуму за 30 днів
     is_hist_low = cur_dec <= min_30d and (max_30d > min_30d or (old_price and old_price > cur_dec))
@@ -492,7 +562,7 @@ def build_product_caption_with_30d_stats(
         max_30d=max_30d,
         avg_30d=avg_30d,
         old_price=ref_old,
-        history_prices=prices,
+        history_prices=valid_prices,
     )
     if deal_score >= 88:
         verdict = {
@@ -529,7 +599,7 @@ def build_product_caption_with_30d_stats(
                 "ru": f"ещё −{fmt_money(rem, curr)} до цели",
             }.get(lang, f"ще −{fmt_money(rem, curr)}")
         tgt_lbl = {"uk": "Ваша ціль:", "en": "Your target:", "ru": "Ваша цель:"}.get(lang, "Ваша ціль:")
-        target_line = f"🎯 <b>{tgt_lbl}</b> <code>{fmt_money(tgt_dec, curr)}</code> (<i>{tgt_status}</i>)\n"
+        target_line = f"🎯 <b>{tgt_lbl}</b> <code>{fmt_money_with_uah(tgt_dec, curr)}</code> (<i>{tgt_status}</i>)\n"
     else:
         target_line = {
             "uk": "🎯 <b>Ваша ціль:</b> <i>не задана (сповістимо про будь-яку знижку)</i>\n",
@@ -537,7 +607,7 @@ def build_product_caption_with_30d_stats(
             "ru": "🎯 <b>Ваша цель:</b> <i>не задана (сообщим о любой скидке)</i>\n",
         }.get(lang, "")
 
-    score_lbl = {"uk": "Вигода:", "en": "Deal Score:", "ru": "Выгода:"}.get(lang, "Вигода:")
+    score_lbl = {"uk": "Вигода (Deal Score):", "en": "Deal Score:", "ru": "Выгода (Deal Score):"}.get(lang, "Вигода (Deal Score):")
     lbl_30d = {"uk": "Ціни за 30 днів:", "en": "30-Day Price Range:", "ru": "Цены за 30 дней:"}.get(lang, "Ціни за 30 днів:")
     lbl_min = {"uk": "Мін", "en": "Min", "ru": "Мин"}.get(lang, "Мін")
     lbl_avg = {"uk": "Сер", "en": "Avg", "ru": "Сред"}.get(lang, "Сер")
@@ -552,7 +622,7 @@ def build_product_caption_with_30d_stats(
         f"{header_text}\n"
         f"──────────────────────────────────\n"
         f"📦 <b>{short_title}</b>\n"
-        f"🏪 {mp_label} · {avail_badge}\n\n"
+        f"🏪 {mp_label} · {avail_badge}{cat_part}\n\n"
         f"{price_badge}\n"
         f"{hist_low_line}"
         f"{target_line}"
@@ -776,13 +846,224 @@ def build_price_drop_alert_card(
         f"──────────────────────────────────\n"
         f"📦 <b>{short_title}</b>\n"
         f"🏪 {mp_label}\n\n"
-        f"🟢 <b>{lbl_drop}</b> <code>{fmt_money(new_dec, curr)}</code> "
+        f"🟢 <b>{lbl_drop}</b> <code>{fmt_money_with_uah(new_dec, curr)}</code> "
         f"<s>{fmt_money(old_dec, curr)}</s> (<code>-{max(1, pct)}%</code>)\n"
         f"💸 <b>{lbl_save}</b> <code>-{fmt_money(diff, curr)}</code>\n"
         f"{hist_line}"
         f"{target_line}"
         f"⚖️ <b>Deal Score:</b> <code>{deal_score}/100</code> ({verdict})"
     )
+
+
+def build_back_in_stock_alert_card(
+    *,
+    title: str,
+    marketplace: str,
+    currency: str,
+    new_price: Decimal,
+    lang: str = "uk",
+) -> str:
+    """
+    Картка миттєвої тривоги «🚨 СНАЙПЕР НАЯВНОСТІ · ТОВАР З'ЯВИВСЯ!» (Back-in-Stock Alert).
+    """
+    lang = normalize_lang(lang)
+    curr = currency or "UAH"
+    new_dec = Decimal(str(new_price))
+    short_title = truncate_title(title, max_len=48)
+    mp_label = format_marketplace_label(marketplace)
+
+    if lang == "en":
+        return (
+            "🚨 <b>BACK IN STOCK ALERT!</b>\n"
+            "──────────────────────────────────\n"
+            f"📦 <b>{short_title}</b>\n"
+            f"🏪 {mp_label} · 🟢 <b>In Stock Now!</b>\n\n"
+            f"💰 <b>Price:</b> <code>{fmt_money_with_uah(new_dec, curr)}</code>\n"
+            "⚡️ <i>Hurry up and grab it before it sells out again!</i>"
+        )
+    if lang == "ru":
+        return (
+            "🚨 <b>СНАЙПЕР НАЛИЧИЯ · ТОВАР ПОЯВИЛСЯ!</b>\n"
+            "──────────────────────────────────\n"
+            f"📦 <b>{short_title}</b>\n"
+            f"🏪 {mp_label} · 🟢 <b>В наличии!</b>\n\n"
+            f"💰 <b>Цена:</b> <code>{fmt_money_with_uah(new_dec, curr)}</code>\n"
+            "⚡️ <i>Успейте забрать товар, пока партию снова не раскупили!</i>"
+        )
+    return (
+        "🚨 <b>СНАЙПЕР НАЯВНОСТІ · ТОВАР З'ЯВИВСЯ!</b>\n"
+        "──────────────────────────────────\n"
+        f"📦 <b>{short_title}</b>\n"
+        f"🏪 {mp_label} · 🟢 <b>Знову в наявності!</b>\n\n"
+        f"💰 <b>Ціна зараз:</b> <code>{fmt_money_with_uah(new_dec, curr)}</code>\n"
+        "⚡️ <i>Встигніть замовити, поки партію знову не розкупили!</i>"
+    )
+
+
+def render_search_results_card(
+    query: str,
+    offers: Sequence[Any],
+    lang: str = "uk",
+) -> tuple[str, InlineKeyboardMarkup]:
+    """
+    Відображає порівняльну таблицю цін за текстовим запитом (без посилання!)
+    із кнопкою «➕ Відстежувати» в 1 клік для кожної пропозиції.
+    """
+    lang = normalize_lang(lang)
+    safe_q = html.escape(query.strip()[:50])
+
+    if not offers:
+        if lang == "en":
+            txt = (
+                f"🔍 <b>Search: «{safe_q}»</b>\n"
+                "──────────────────────────────────\n"
+                "😕 Couldn't find direct offers by this name right now.\n\n"
+                "💡 <b>Tip:</b> Try a shorter model name (e.g. <code>AirPods Pro 2</code>) or paste a direct link from any store!"
+            )
+        elif lang == "ru":
+            txt = (
+                f"🔍 <b>Поиск: «{safe_q}»</b>\n"
+                "──────────────────────────────────\n"
+                "😕 По этому запросу не удалось найти точных предложений.\n\n"
+                "💡 <b>Совет:</b> Уточните модель (например, <code>AirPods Pro 2</code>) или просто отправьте прямую ссылку из магазина!"
+            )
+        else:
+            txt = (
+                f"🔍 <b>Пошук: «{safe_q}»</b>\n"
+                "──────────────────────────────────\n"
+                "😕 За цим запитом зараз не знайдено точних пропозицій.\n\n"
+                "💡 <b>Порада:</b> Спробуйте написати коротшу назву моделі (наприклад, <code>AirPods Pro 2</code>) або просто вставте пряме посилання з магазину!"
+            )
+        return txt, build_add_guide_keyboard(lang)
+
+    header = {
+        "uk": f"🔍 <b>НАЙНИЖЧІ ЦІНИ ЗА ЗАПИТОМ: «{safe_q}»</b>",
+        "en": f"🔍 <b>LOWEST PRICES FOR: «{safe_q}»</b>",
+        "ru": f"🔍 <b>ЛУЧШИЕ ЦЕНЫ ПО ЗАПРОСУ: «{safe_q}»</b>",
+    }.get(lang, "")
+
+    rows: list[str] = []
+    for idx, off in enumerate(offers[:6], start=1):
+        mp_label = format_marketplace_label(off.marketplace)
+        short_t = truncate_title(off.title, max_len=46)
+        price_fmt = fmt_money_with_uah(off.price, off.currency)
+        old_part = ""
+        if off.old_price and off.old_price > off.price:
+            pct = max(1, int(round(float((off.old_price - off.price) / off.old_price) * 100)))
+            old_part = f" <s>{fmt_money(off.old_price, off.currency)}</s> (<code>-{pct}%</code>)"
+
+        avail_icon = "🟢" if getattr(off, "is_available", True) else "🔴 Снайпер"
+        crown = "🏆 <b>НАЙДЕШЕВШЕ</b> · " if (idx == 1 and len(offers) > 1 and lang == "uk") else (
+            "🏆 <b>LOWEST</b> · " if (idx == 1 and len(offers) > 1) else ""
+        )
+        rows.append(
+            f"{crown}<b>#{idx}.</b> {mp_label} ({avail_icon}) — <code>{price_fmt}</code>{old_part}\n"
+            f"   📦 <a href=\"{html.escape(off.url)}\">{short_t}</a>"
+        )
+
+    footer = {
+        "uk": "👇 <i>Натисніть «➕ Стежити» нижче, щоб додати товар у відстеження в 1 клік:</i>",
+        "en": "👇 <i>Tap '➕ Track' below to start monitoring any offer in 1 click:</i>",
+        "ru": "👇 <i>Нажмите «➕ Следить» ниже, чтобы добавить товар в 1 клик:</i>",
+    }.get(lang, "")
+
+    text = (
+        f"{header}\n"
+        "──────────────────────────────────\n"
+        + "\n\n".join(rows)
+        + f"\n──────────────────────────────────\n{footer}"
+    )
+    return text, build_search_results_keyboard(offers, lang=lang)
+
+
+async def render_shared_wishlist_card(
+    session: AsyncSession,
+    owner_id: int,
+    viewer_lang: str = "uk",
+) -> tuple[str, InlineKeyboardMarkup]:
+    """
+    Відображає спільний вішліст друга за deep-link посиланням (/start wishlist_<user_id>).
+    Показує всі товари у списку, сумарну вартість у ₴ та кнопки додавання собі в 1 клік.
+    """
+    lang = normalize_lang(viewer_lang)
+    subs = await crud.get_user_subscriptions_with_history(session, owner_id)
+    if not subs:
+        msg = {
+            "uk": "📭 Цей вішліст наразі порожній або власник видалив товари.",
+            "en": "📭 This shared wishlist is currently empty.",
+            "ru": "📭 Этот вишлист сейчас пуст.",
+        }.get(lang, "")
+        return msg, build_start_keyboard(lang)
+
+    owner = await session.get(User, owner_id)
+    owner_name = (
+        html.escape((getattr(owner, "first_name", None) or (f"@{owner.username}" if owner.username else f"User #{owner_id}"))[:32])
+        if owner
+        else f"#{owner_id}"
+    )
+
+    total_now_uah = Decimal("0")
+    total_min_uah = Decimal("0")
+    rows: list[str] = []
+
+    for idx, sub in enumerate(subs[:10], start=1):
+        p = sub.product
+        cur = Decimal(str(p.current_price))
+        prices = [Decimal(str(h.price)) for h in p.price_history if Decimal(str(h.price)) > 0] if p.price_history else ([cur] if cur > 0 else [])
+        mn = min(prices) if prices else cur
+        total_now_uah += to_uah(cur, p.currency)
+        total_min_uah += to_uah(mn, p.currency)
+
+        mp_label = format_marketplace_label(p.marketplace)
+        short_t = truncate_title(p.title, max_len=44)
+        cat_badge = format_category_badge(getattr(sub, "category_tag", None), lang)
+        cat_str = f" · {cat_badge}" if cat_badge else ""
+        price_str = fmt_money_with_uah(cur, p.currency) if cur > 0 else "🟢 Снайпер наявності"
+
+        rows.append(
+            f"<b>{idx}.</b> {mp_label}{cat_str} — <code>{price_str}</code>\n"
+            f"   📦 <a href=\"{html.escape(p.url)}\">{short_t}</a>"
+        )
+
+    potential_save_uah = max(Decimal("0"), total_now_uah - total_min_uah)
+    header = {
+        "uk": f"🎁 <b>СПІЛЬНИЙ ВІШЛІСТ · {owner_name}</b>",
+        "en": f"🎁 <b>SHARED WISHLIST · {owner_name}</b>",
+        "ru": f"🎁 <b>ОБЩИЙ ВИШЛИСТ · {owner_name}</b>",
+    }.get(lang, "")
+
+    summary = {
+        "uk": (
+            f"🛒 <b>Вартість списку сьогодні:</b> <code>~{fmt_money(total_now_uah, 'UAH')}</code>\n"
+            f"📉 <b>На мінімумі 30д:</b> <code>~{fmt_money(total_min_uah, 'UAH')}</code> "
+            f"(потенціал економії <code>{fmt_money(potential_save_uah, 'UAH')}</code>)"
+        ),
+        "en": (
+            f"🛒 <b>Total value today:</b> <code>~{fmt_money(total_now_uah, 'UAH')}</code>\n"
+            f"📉 <b>At 30d lows:</b> <code>~{fmt_money(total_min_uah, 'UAH')}</code> "
+            f"(potential save <code>{fmt_money(potential_save_uah, 'UAH')}</code>)"
+        ),
+        "ru": (
+            f"🛒 <b>Стоимость списка сегодня:</b> <code>~{fmt_money(total_now_uah, 'UAH')}</code>\n"
+            f"📉 <b>На минимуме 30д:</b> <code>~{fmt_money(total_min_uah, 'UAH')}</code> "
+            f"(потенциал экономии <code>{fmt_money(potential_save_uah, 'UAH')}</code>)"
+        ),
+    }.get(lang, "")
+
+    hint = {
+        "uk": "👇 <i>Натисніть на будь-який товар нижче, щоб додати його у своє відстеження:</i>",
+        "en": "👇 <i>Tap any item below to copy it to your own tracking list:</i>",
+        "ru": "👇 <i>Нажмите на любой товар ниже, чтобы добавить его себе в отслеживание:</i>",
+    }.get(lang, "")
+
+    text = (
+        f"{header}\n"
+        f"{summary}\n"
+        "──────────────────────────────────\n"
+        + "\n\n".join(rows)
+        + f"\n──────────────────────────────────\n{hint}"
+    )
+    return text, build_shared_wishlist_keyboard(subs, lang=lang)
 
 
 def build_daily_digest_card(
@@ -1053,17 +1334,28 @@ async def render_my_tracking_text_and_kb(
     session: AsyncSession,
     db_user: User,
     page: int = 1,
+    category_tag: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """
     Формує зрозумілий список відстежуваних товарів («📦 Мої товари») зі статусами знижок,
-    пагінацією та інтуїтивною клавіатурою (1 кнопка = 1 товар).
+    фільтрацією за розумними добірками (📁 Вішлісти), авто-перерахунком валют за курсом НБУ
+    та розрахунком сумарної вартості списку сьогодні vs на мінімумі.
     """
     lang = normalize_lang(db_user.language)
-    subscriptions = await crud.get_user_subscriptions_with_history(session, db_user.id)
+    all_subscriptions = await crud.get_user_subscriptions_with_history(session, db_user.id)
     max_limit = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
 
-    if not subscriptions:
-        return t("empty_tracking", lang), build_start_keyboard(lang=lang)
+    if not all_subscriptions:
+        return t("empty_tracking", lang), build_start_keyboard(lang=lang, items_count=0)
+
+    active_tag = category_tag if category_tag and category_tag != "all" else None
+    if active_tag:
+        subscriptions = [s for s in all_subscriptions if getattr(s, "category_tag", None) == active_tag]
+        if not subscriptions:
+            subscriptions = all_subscriptions
+            active_tag = None
+    else:
+        subscriptions = all_subscriptions
 
     total_items = len(subscriptions)
     total_pages = max(1, math.ceil(total_items / ITEMS_PER_PAGE))
@@ -1073,12 +1365,25 @@ async def render_my_tracking_text_and_kb(
 
     discounted_count = 0
     targets_count = 0
+    sniper_count = 0
+    list_total_uah = Decimal("0")
+    list_min_uah = Decimal("0")
+
     for s in subscriptions:
         if s.target_price is not None:
             targets_count += 1
-        hist = [Decimal(str(h.price)) for h in s.product.price_history] if s.product.price_history else []
-        if hist and Decimal(str(s.product.current_price)) < max(hist):
+        p = s.product
+        cur_p = Decimal(str(p.current_price))
+        if not getattr(p, "is_available", True) or cur_p <= Decimal("0"):
+            sniper_count += 1
+            continue
+        hist = [Decimal(str(h.price)) for h in p.price_history if Decimal(str(h.price)) > 0] if p.price_history else [cur_p]
+        mx_p = max(hist) if hist else cur_p
+        mn_p = min(hist) if hist else cur_p
+        if cur_p < mx_p:
             discounted_count += 1
+        list_total_uah += to_uah(cur_p, p.currency)
+        list_min_uah += to_uah(mn_p, p.currency)
 
     rows: list[str] = []
     for idx, sub in enumerate(page_subs, start=start_idx + 1):
@@ -1086,14 +1391,30 @@ async def render_my_tracking_text_and_kb(
         mp_label = format_marketplace_label(p.marketplace)
         title_escaped = truncate_title(p.title, max_len=44)
         cur = Decimal(str(p.current_price))
-        prices = [Decimal(str(h.price)) for h in p.price_history] if p.price_history else [cur]
-        mx = max(prices)
+        is_avail = getattr(p, "is_available", True) and cur > Decimal("0")
+        cat_badge = format_category_badge(getattr(sub, "category_tag", None), lang)
+        cat_part = f" · {cat_badge}" if cat_badge and not active_tag else ""
+
+        if not is_avail:
+            sniper_str = {
+                "uk": "🟢 <b>Снайпер наявності</b> (чекаємо поставку)",
+                "en": "🟢 <b>Stock Sniper</b> (waiting for restock)",
+                "ru": "🟢 <b>Снайпер наличия</b> (ждём поставку)",
+            }.get(lang, "")
+            rows.append(
+                f"<b>{idx}.</b> {mp_label}{cat_part} — <a href=\"{html.escape(p.url)}\">{title_escaped}</a>\n"
+                f"   {sniper_str}"
+            )
+            continue
+
+        prices = [Decimal(str(h.price)) for h in p.price_history if Decimal(str(h.price)) > 0] if p.price_history else [cur]
+        mx = max(prices) if prices else cur
 
         if mx > cur:
             pct = max(1, int(round((float(mx - cur) / max(0.01, float(mx))) * 100)))
-            price_str = f"🟢 <code>{fmt_money(cur, p.currency)}</code> <s>{fmt_money(mx, p.currency)}</s> (<code>-{pct}%</code>)"
+            price_str = f"🟢 <code>{fmt_money_with_uah(cur, p.currency)}</code> <s>{fmt_money(mx, p.currency)}</s> (<code>-{pct}%</code>)"
         else:
-            price_str = f"💰 <code>{fmt_money(cur, p.currency)}</code>"
+            price_str = f"💰 <code>{fmt_money_with_uah(cur, p.currency)}</code>"
 
         target_badge = ""
         if sub.target_price is not None:
@@ -1102,26 +1423,55 @@ async def render_my_tracking_text_and_kb(
             target_badge = f" · 🎯 <code>{fmt_money(tgt_dec, p.currency)}</code>{reached}"
 
         rows.append(
-            f"<b>{idx}.</b> {mp_label} — <a href=\"{html.escape(p.url)}\">{title_escaped}</a>\n"
+            f"<b>{idx}.</b> {mp_label}{cat_part} — <a href=\"{html.escape(p.url)}\">{title_escaped}</a>\n"
             f"   {price_str}{target_badge}"
         )
 
+    sniper_part = f" · 🟢 Снайпер: <code>{sniper_count}</code>" if sniper_count > 0 else ""
     summary_line = {
-        "uk": f"🟢 Зі знижкою: <code>{discounted_count}</code> · 🎯 Цілей задано: <code>{targets_count}</code>\n",
-        "en": f"🟢 On sale: <code>{discounted_count}</code> · 🎯 Targets set: <code>{targets_count}</code>\n",
-        "ru": f"🟢 Со скидкой: <code>{discounted_count}</code> · 🎯 Целей задано: <code>{targets_count}</code>\n",
+        "uk": f"🟢 Зі знижкою: <code>{discounted_count}</code> · 🎯 Цілей: <code>{targets_count}</code>{sniper_part}\n",
+        "en": f"🟢 On sale: <code>{discounted_count}</code> · 🎯 Targets: <code>{targets_count}</code>{sniper_part}\n",
+        "ru": f"🟢 Со скидкой: <code>{discounted_count}</code> · 🎯 Целей: <code>{targets_count}</code>{sniper_part}\n",
     }.get(lang, "")
 
-    rows_block = summary_line + "\n" + "\n\n".join(rows)
+    wishlist_calc_line = ""
+    if len(subscriptions) > 1 and list_total_uah > Decimal("0"):
+        pot_save = max(Decimal("0"), list_total_uah - list_min_uah)
+        cat_title = format_category_badge(active_tag, lang) if active_tag else (
+            {"uk": "Весь список", "en": "Full list", "ru": "Весь список"}.get(lang, "Весь список")
+        )
+        wishlist_calc_line = {
+            "uk": (
+                f"📁 <b>{cat_title} сьогодні:</b> <code>~{fmt_money(list_total_uah, 'UAH')}</code> "
+                f"(на мінімумах 30д: <code>~{fmt_money(list_min_uah, 'UAH')}</code>, вигода до <code>{fmt_money(pot_save, 'UAH')}</code>)\n"
+            ),
+            "en": (
+                f"📁 <b>{cat_title} today:</b> <code>~{fmt_money(list_total_uah, 'UAH')}</code> "
+                f"(at 30d lows: <code>~{fmt_money(list_min_uah, 'UAH')}</code>, save up to <code>{fmt_money(pot_save, 'UAH')}</code>)\n"
+            ),
+            "ru": (
+                f"📁 <b>{cat_title} сегодня:</b> <code>~{fmt_money(list_total_uah, 'UAH')}</code> "
+                f"(на минимумах 30д: <code>~{fmt_money(list_min_uah, 'UAH')}</code>, выгода до <code>{fmt_money(pot_save, 'UAH')}</code>)\n"
+            ),
+        }.get(lang, "")
+
+    rows_block = summary_line + wishlist_calc_line + "\n" + "\n\n".join(rows)
 
     text = t(
         "my_products_header",
         lang,
-        used=total_items,
+        used=len(all_subscriptions),
         max_limit=max_limit,
         rows=rows_block,
     )
-    return text, build_tracking_list_keyboard(subscriptions, user_id=db_user.id, lang=lang, page=cur_page)
+    return text, build_tracking_list_keyboard(
+        subscriptions,
+        user_id=db_user.id,
+        lang=lang,
+        page=cur_page,
+        active_tag=active_tag,
+        all_subscriptions=all_subscriptions,
+    )
 
 
 def compute_optimal_target_price(
@@ -1399,8 +1749,8 @@ async def render_pro_offer_card(
 async def render_user_stats_text(session: AsyncSession, db_user: User) -> str:
     """
     Формує зведену 30-денну портфельну аналітику:
-    - Сумарна вартість кошика зараз vs 30-денний пік
-    - Загальна економія по кожній валюті
+    - Сумарна вартість кошика зараз vs 30-денний пік (включно з єдиним перерахунком у ₴ за курсом НБУ)
+    - Загальна економія по кожній валюті та по вішлістах (📁 Добірках)
     - Середній індекс вигоди (Deal Score) та кількість досягнутих цілей
     """
     lang = normalize_lang(db_user.language)
@@ -1410,25 +1760,44 @@ async def render_user_stats_text(session: AsyncSession, db_user: User) -> str:
 
     savings_by_currency: dict[str, Decimal] = {}
     cart_by_currency: dict[str, Decimal] = {}
+    total_cart_uah = Decimal("0")
+    total_savings_uah = Decimal("0")
+    category_totals_uah: dict[str, Decimal] = {}
+    has_foreign_currency = False
     best_deals_lines: list[str] = []
     scores: list[int] = []
     reached_targets = 0
 
     for sub in subscriptions:
         prod = sub.product
-        history = prod.price_history if prod else []
-        prices = [Decimal(str(h.price)) for h in history] if history else [Decimal(str(prod.current_price))]
-
         cur = Decimal(str(prod.current_price))
+        if cur <= Decimal("0") or not getattr(prod, "is_available", True):
+            continue
+
+        history = prod.price_history if prod else []
+        prices = [Decimal(str(h.price)) for h in history if Decimal(str(h.price)) > 0] if history else [cur]
+        if not prices:
+            prices = [cur]
+
         mn = min(prices)
         mx = max(prices)
         av = sum(prices) / Decimal(len(prices))
-        curr = prod.currency
+        curr = prod.currency or "UAH"
+        if curr.upper() != "UAH":
+            has_foreign_currency = True
 
         cart_by_currency[curr] = cart_by_currency.get(curr, Decimal("0")) + cur
+        cur_uah = to_uah(cur, curr)
+        total_cart_uah += cur_uah
+
+        cat_tag = getattr(sub, "category_tag", None)
+        if cat_tag:
+            category_totals_uah[cat_tag] = category_totals_uah.get(cat_tag, Decimal("0")) + cur_uah
+
         saved = max(Decimal("0"), mx - cur)
         if saved > 0:
             savings_by_currency[curr] = savings_by_currency.get(curr, Decimal("0")) + saved
+            total_savings_uah += to_uah(saved, curr)
 
         score = compute_deal_score(current_price=cur, min_30d=mn, max_30d=mx, avg_30d=av, old_price=mx)
         scores.append(score)
@@ -1451,7 +1820,7 @@ async def render_user_stats_text(session: AsyncSession, db_user: User) -> str:
                 lang,
                 mp_label=mp_label,
                 title=short_title,
-                cur=fmt_money(cur, curr),
+                cur=fmt_money_with_uah(cur, curr),
                 mn=fmt_money(mn, curr),
                 mx=fmt_money(mx, curr),
                 save_badge=save_badge,
@@ -1460,25 +1829,41 @@ async def render_user_stats_text(session: AsyncSession, db_user: User) -> str:
 
     if savings_by_currency:
         savings_str = " + ".join(fmt_money(val, curr) for curr, val in savings_by_currency.items())
+        if has_foreign_currency:
+            savings_str += f" (~{fmt_money(total_savings_uah, 'UAH')} НБУ)"
     else:
         savings_str = "0 ₴"
 
-    cart_str = " + ".join(fmt_money(val, curr) for curr, val in cart_by_currency.items())
-    avg_score = int(round(sum(scores) / max(1, len(scores))))
+    cart_str = " + ".join(fmt_money(val, curr) for curr, val in cart_by_currency.items()) or "0 ₴"
+    if has_foreign_currency and total_cart_uah > 0:
+        cart_str += f" (<code>~{fmt_money(total_cart_uah, 'UAH')}</code> за курсом НБУ)"
+
+    avg_score = int(round(sum(scores) / max(1, len(scores)))) if scores else 75
+
+    cat_summary_line = ""
+    if category_totals_uah:
+        parts = [
+            f"{format_category_badge(tag, lang)}: <code>~{fmt_money(val, 'UAH')}</code>"
+            for tag, val in category_totals_uah.items()
+        ]
+        cat_summary_line = "📁 " + " · ".join(parts) + "\n"
 
     portfolio_meta = {
         "uk": (
             f"🛒 <b>Вартість кошика зараз:</b> <code>{cart_str}</code>\n"
+            f"{cat_summary_line}"
             f"⚖️ <b>Середній Deal Score:</b> <code>{avg_score}/100</code> · "
             f"🎯 <b>Цілей досягнуто:</b> <code>{reached_targets}</code>\n"
         ),
         "en": (
             f"🛒 <b>Current cart value:</b> <code>{cart_str}</code>\n"
+            f"{cat_summary_line}"
             f"⚖️ <b>Average Deal Score:</b> <code>{avg_score}/100</code> · "
             f"🎯 <b>Targets reached:</b> <code>{reached_targets}</code>\n"
         ),
         "ru": (
             f"🛒 <b>Стоимость корзины сейчас:</b> <code>{cart_str}</code>\n"
+            f"{cat_summary_line}"
             f"⚖️ <b>Средний Deal Score:</b> <code>{avg_score}/100</code> · "
             f"🎯 <b>Целей достигнуто:</b> <code>{reached_targets}</code>\n"
         ),
