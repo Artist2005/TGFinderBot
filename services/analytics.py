@@ -386,7 +386,11 @@ def render_dashboard_card(db_user: User, items_count: int = 0) -> str:
     """
     lang = normalize_lang(db_user.language)
     max_limit = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
-    tier = "⭐️ PRO" if db_user.has_active_pro else "Free"
+    tier = (
+        "👑 PRO MAX (∞)"
+        if (db_user.has_active_pro and db_user.pro_until is None)
+        else ("⭐️ PRO" if db_user.has_active_pro else "Free")
+    )
 
     if items_count == 0:
         if lang == "en":
@@ -1372,7 +1376,11 @@ def render_settings_card(db_user: User, items_count: int = 0) -> str:
     """Формує стильну картку налаштувань користувача з індикаторами сповіщень та нічного режиму."""
     lang = normalize_lang(db_user.language)
     max_limit = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
-    tier = "⭐️ PRO" if db_user.has_active_pro else "Free"
+    tier = (
+        "👑 PRO MAX (∞)"
+        if (db_user.has_active_pro and db_user.pro_until is None)
+        else ("⭐️ PRO" if db_user.has_active_pro else "Free")
+    )
     notify_on = getattr(db_user, "notifications_enabled", True)
     dnd_on = getattr(db_user, "dnd_enabled", False)
 
@@ -1739,12 +1747,18 @@ async def render_pro_offer_card(
         savings_uah = Decimal("1850")
     savings_str = fmt_money(savings_uah.quantize(Decimal("1")), "UAH")
 
-    if db_user.has_active_pro and db_user.pro_until is not None:
+    if db_user.has_active_pro and db_user.pro_until is None:
+        status_line = {
+            "uk": f"👑 <b>Ваш статус: ⭐️ PRO MAX · Довічний (Розробник) · <code>{used_count}/{pro_max}</code> товарів</b>",
+            "en": f"👑 <b>Your status: ⭐️ PRO MAX · Lifetime (Developer) · <code>{used_count}/{pro_max}</code> items</b>",
+            "ru": f"👑 <b>Ваш статус: ⭐️ PRO MAX · Пожизненный (Разработчик) · <code>{used_count}/{pro_max}</code> товаров</b>",
+        }.get(lang, "")
+    elif db_user.has_active_pro and db_user.pro_until is not None:
         until_str = db_user.pro_until.strftime("%d.%m.%Y")
         status_line = {
-            "uk": f"✅ <b>Ваш статус: ⭐️ PRO активний до <code>{until_str}</code></b>",
-            "en": f"✅ <b>Your status: ⭐️ PRO active until <code>{until_str}</code></b>",
-            "ru": f"✅ <b>Ваш статус: ⭐️ PRO активен до <code>{until_str}</code></b>",
+            "uk": f"✅ <b>Ваш статус: ⭐️ PRO активний до <code>{until_str}</code> (<code>{used_count}/{pro_max}</code> товарів)</b>",
+            "en": f"✅ <b>Your status: ⭐️ PRO active until <code>{until_str}</code> (<code>{used_count}/{pro_max}</code> items)</b>",
+            "ru": f"✅ <b>Ваш статус: ⭐️ PRO активен до <code>{until_str}</code> (<code>{used_count}/{pro_max}</code> товаров)</b>",
         }.get(lang, "")
     else:
         status_line = {

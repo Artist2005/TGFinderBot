@@ -39,11 +39,28 @@ class Settings(BaseSettings):
         description="Базовий URL CPA-мережі (наприклад, https://rdr.salesdoubler.com.ua/in/offer/1234/)",
     )
 
+    # --- Адміністратори та Розробник (довічна максимальна підписка PRO MAX) ---
+    admin_ids: str = Field(
+        default="",
+        alias="ADMIN_IDS",
+        description="Список Telegram ID розробника/адміністраторів через кому (напр. 123456789)",
+    )
+
     # --- Бізнес-логіка та ліміти Freemium / Pro ---
     free_max_products: int = Field(default=3, alias="FREE_MAX_PRODUCTS")
     pro_max_products: int = Field(default=50, alias="PRO_MAX_PRODUCTS")
     pro_price_stars: int = Field(default=40, alias="PRO_PRICE_STARS")
     pro_duration_days: int = Field(default=30, alias="PRO_DURATION_DAYS")
+
+    @property
+    def admin_id_set(self) -> set[int]:
+        """Повертає множину числових Telegram ID розробника/адміністраторів."""
+        result: set[int] = set()
+        for part in (self.admin_ids or "").replace(";", ",").split(","):
+            clean = part.strip()
+            if clean.isdigit():
+                result.add(int(clean))
+        return result
 
     # --- Інтервали перевірки цін (Free: раз на добу = 24 год, PRO: кожні 12 год = 720 хв) ---
     free_check_interval_hours: int = Field(default=24, alias="FREE_CHECK_INTERVAL_HOURS")

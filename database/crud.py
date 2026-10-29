@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bot.i18n import normalize_lang
+from config import settings
 from database.models import PriceHistory, ProcessedPayment, Product, User, UserProduct
 from services.scraper import scraper_service
 from services.scraper.history_backfill import generate_past_month_history
@@ -106,13 +107,15 @@ async def get_or_create_user(
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
 
+    is_admin = user_id in settings.admin_id_set
     now = datetime.now(timezone.utc)
     if user is None:
         user = User(
             id=user_id,
             username=username,
             language=normalize_lang(language_code),
-            is_pro=False,
+            is_pro=is_admin,
+            pro_until=None,
         )
         session.add(user)
         try:
@@ -132,7 +135,11 @@ async def get_or_create_user(
         user.language = normalize_lang(language_code)
         changed = True
 
-    if user.is_pro and user.pro_until is not None:
+    if is_admin and (not user.is_pro or user.pro_until is not None):
+        user.is_pro = True
+        user.pro_until = None
+        changed = True
+    elif user.is_pro and user.pro_until is not None:
         pro_until_utc = (
             user.pro_until
             if user.pro_until.tzinfo is not None
@@ -349,6 +356,10 @@ async def get_top_price_drops(
 
 def _extend_user_pro_in_memory(user: User, duration_days: int, now: datetime) -> None:
     """Допоміжна функція подовження терміну дії PRO для заблокованого об'єкта User."""
+    if user.is_pro and user.pro_until is None:
+        # Користувач має довічну (Lifetime / Developer) підписку PRO MAX — не обмежуємо її датою
+        return
+
     base_time = now
     if user.is_pro and user.pro_until is not None:
         pro_until_utc = (
@@ -853,6 +864,21 @@ async def cleanup_database_storage(
         "pruned_history": pruned_history,
         "pruned_products": pruned_products,
     }
+
+
+async def grant_lifetime_pro(
+    session: AsyncSession,
+    user_id: int,
+) -> User:
+    """Надає користувачу (розробнику/адміністратору) довічну максимальну підписку ⭐️ PRO MAX (pro_until=None)."""
+    await get_or_create_user(session, user_id)
+    stmt = _with_for_update_if_supported(select(User).where(User.id == user_id), session)
+    user = (await session.execute(stmt)).scalar_one()
+    user.is_pro = True
+    user.pro_until = None
+    await session.commit()
+    await session.refresh(user)
+    return user
 
 
 async def activate_user_pro(

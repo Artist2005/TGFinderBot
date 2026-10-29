@@ -100,7 +100,11 @@ async def cmd_start(
 
     items_count = await crud.count_user_subscriptions(session, db_user.id)
     limit = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
-    tier_badge = "⭐️ PRO" if db_user.has_active_pro else "Free"
+    tier_badge = (
+        "👑 PRO MAX (∞)"
+        if (db_user.has_active_pro and db_user.pro_until is None)
+        else ("⭐️ PRO" if db_user.has_active_pro else "Free")
+    )
 
     # Deep-link: Спільний вішліст друга (/start wishlist_<owner_id>)
     if args.startswith("wishlist_"):
@@ -296,7 +300,14 @@ async def cmd_admin_dashboard(
 ) -> None:
     """Комерційна панель адміністратора (/admin) зі статистикою платформи."""
     lang = db_user.language
+    if not settings.admin_id_set or db_user.id in settings.admin_id_set:
+        db_user = await crud.grant_lifetime_pro(session, db_user.id)
     stats = await crud.get_platform_stats(session)
+    dev_footer = (
+        f"\n──────────────────────────────────\n"
+        f"👑 <b>Розробник:</b> <code>ID {db_user.id}</code> · "
+        f"Тариф: <code>{'👑 PRO MAX (Довічний)' if (db_user.has_active_pro and db_user.pro_until is None) else 'Free'}</code>"
+    )
     await message.answer(
         t(
             "admin_stats",
@@ -307,6 +318,34 @@ async def cmd_admin_dashboard(
             subs=stats["total_subs"],
             points=stats["total_points"],
         )
+        + dev_footer
+    )
+
+
+@router.message(Command("dev_pro", "vip"))
+async def cmd_dev_lifetime_pro(
+    message: Message,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    """Миттєва активація максимальної довічної підписки для розробника (/dev_pro або /vip)."""
+    if settings.admin_id_set and db_user.id not in settings.admin_id_set:
+        await message.answer("⛔ Ця команда доступна лише розробнику бота.")
+        return
+
+    db_user = await crud.grant_lifetime_pro(session, db_user.id)
+    items_count = await crud.count_user_subscriptions(session, db_user.id)
+    await message.answer(
+        "👑 <b>МАКСИМАЛЬНУ ПІДПИСКУ РОЗРОБНИКА АКТИВОВАНО!</b>\n"
+        "──────────────────────────────────\n"
+        f"👤 <b>Ваш Telegram ID:</b> <code>{db_user.id}</code>\n"
+        "💎 <b>Статус:</b> <code>⭐️ PRO MAX · Довічний (∞)</code>\n"
+        f"📦 <b>Ліміт товарів:</b> <code>{items_count}/{settings.pro_max_products}</code>\n"
+        "⚡️ <b>Перевірка цін:</b> <code>кожні 12 год (пріоритетна черга)</code>\n"
+        "🧠 <b>AI-Прогноз, Пакетний імпорт (до 10 лінків) та CSV:</b> <code>УВІМКНЕНО ✅</code>\n"
+        "──────────────────────────────────\n"
+        "<i>Підписка закріплена за вашим акаунтом назавжди і ніколи не списується.</i>",
+        reply_markup=build_main_reply_keyboard(db_user.language, items_count=items_count),
     )
 
 

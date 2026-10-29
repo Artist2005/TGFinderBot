@@ -126,6 +126,28 @@ async def init_db() -> None:
                         )
                     )
 
+            # Автоматична активація довічної максимальної підписки (👑 PRO MAX) для розробника/власника бота
+            if insp.has_table("users"):
+                admin_ids = settings.admin_id_set
+                if admin_ids:
+                    for aid in admin_ids:
+                        sync_conn.execute(
+                            text("UPDATE users SET is_pro = TRUE, pro_until = NULL WHERE id = :aid"),
+                            {"aid": aid},
+                        )
+                else:
+                    total_users_row = sync_conn.execute(text("SELECT COUNT(*) FROM users")).fetchone()
+                    total_users = int(total_users_row[0]) if total_users_row else 0
+                    if 1 <= total_users <= 5:
+                        owner_row = sync_conn.execute(
+                            text("SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 1")
+                        ).fetchone()
+                        if owner_row is not None:
+                            sync_conn.execute(
+                                text("UPDATE users SET is_pro = TRUE, pro_until = NULL WHERE id = :uid"),
+                                {"uid": int(owner_row[0])},
+                            )
+
         await conn.run_sync(_migrate_columns)
 
 
