@@ -5,9 +5,11 @@ import html
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.handlers.links import PromoCodeState
 from bot.i18n import fmt_money, t
 from bot.keyboards.inline import (
     build_add_guide_keyboard,
@@ -17,6 +19,7 @@ from bot.keyboards.inline import (
     build_price_alert_keyboard,
     build_pro_offer_keyboard,
     build_product_card_keyboard,
+    build_promo_input_keyboard,
     build_referral_keyboard,
     build_settings_keyboard,
     build_start_keyboard,
@@ -44,6 +47,8 @@ from services.analytics import (
     render_dashboard_card,
     render_my_tracking_text_and_kb,
     render_pro_offer_card,
+    render_promo_prompt_card,
+    render_promo_success_card,
     render_quick_compare_card,
     render_settings_card,
     render_shared_wishlist_card,
@@ -300,14 +305,7 @@ async def cmd_admin_dashboard(
 ) -> None:
     """Комерційна панель адміністратора (/admin) зі статистикою платформи."""
     lang = db_user.language
-    if not settings.admin_id_set or db_user.id in settings.admin_id_set:
-        db_user = await crud.grant_lifetime_pro(session, db_user.id)
     stats = await crud.get_platform_stats(session)
-    dev_footer = (
-        f"\n──────────────────────────────────\n"
-        f"👑 <b>Розробник:</b> <code>ID {db_user.id}</code> · "
-        f"Тариф: <code>{'👑 PRO MAX (Довічний)' if (db_user.has_active_pro and db_user.pro_until is None) else 'Free'}</code>"
-    )
     await message.answer(
         t(
             "admin_stats",
@@ -318,35 +316,54 @@ async def cmd_admin_dashboard(
             subs=stats["total_subs"],
             points=stats["total_points"],
         )
-        + dev_footer
     )
 
 
-@router.message(Command("dev_pro", "vip"))
-async def cmd_dev_lifetime_pro(
+@router.message(Command("promo", "promocode"))
+async def cmd_promo_code(
     message: Message,
+    command: CommandObject,
+    state: FSMContext,
     session: AsyncSession,
     db_user: User,
 ) -> None:
-    """Миттєва активація максимальної довічної підписки для розробника (/dev_pro або /vip)."""
-    if settings.admin_id_set and db_user.id not in settings.admin_id_set:
-        await message.answer("⛔ Ця команда доступна лише розробнику бота.")
+    """Активація промокоду (/promo або /promo <КОД>) для відкриття довічного плану ⭐️ PRO."""
+    lang = db_user.language
+    raw_code = (command.args or "").strip()
+    if not raw_code:
+        await state.set_state(PromoCodeState.waiting_for_code)
+        await message.answer(
+            render_promo_prompt_card(lang),
+            reply_markup=build_promo_input_keyboard(lang),
+        )
         return
 
-    db_user = await crud.grant_lifetime_pro(session, db_user.id)
-    items_count = await crud.count_user_subscriptions(session, db_user.id)
-    await message.answer(
-        "👑 <b>МАКСИМАЛЬНУ ПІДПИСКУ РОЗРОБНИКА АКТИВОВАНО!</b>\n"
-        "──────────────────────────────────\n"
-        f"👤 <b>Ваш Telegram ID:</b> <code>{db_user.id}</code>\n"
-        "💎 <b>Статус:</b> <code>⭐️ PRO MAX · Довічний (∞)</code>\n"
-        f"📦 <b>Ліміт товарів:</b> <code>{items_count}/{settings.pro_max_products}</code>\n"
-        "⚡️ <b>Перевірка цін:</b> <code>кожні 12 год (пріоритетна черга)</code>\n"
-        "🧠 <b>AI-Прогноз, Пакетний імпорт (до 10 лінків) та CSV:</b> <code>УВІМКНЕНО ✅</code>\n"
-        "──────────────────────────────────\n"
-        "<i>Підписка закріплена за вашим акаунтом назавжди і ніколи не списується.</i>",
-        reply_markup=build_main_reply_keyboard(db_user.language, items_count=items_count),
-    )
+    updated_user = await crud.redeem_promo_code(session, db_user.id, raw_code)
+    if updated_user is not None:
+        await state.clear()
+        items_count = await crud.count_user_subscriptions(session, updated_user.id)
+        await message.answer(
+            render_promo_success_card(updated_user, raw_code, items_count=items_count),
+            reply_markup=build_start_keyboard(lang, items_count=items_count),
+        )
+        return
+
+    await state.set_state(PromoCodeState.waiting_for_code)
+    invalid_msg = {
+        "uk": (
+            "❌ <b>Промокод не знайдено або він недійсний.</b>\n"
+            "Перевірте правильність написання та надішліть промокод повідомленням:"
+        ),
+        "en": (
+            "❌ <b>Invalid promo code.</b>\n"
+            "Please check the spelling and send the promo code in a message:"
+        ),
+        "ru": (
+            "❌ <b>Промокод не найден или недействителен.</b>\n"
+            "Проверьте правильность ввода и отправьте промокод сообщением:"
+        ),
+    }.get(lang, "")
+    await message.answer(invalid_msg, reply_markup=build_promo_input_keyboard(lang))
 
 
 @router.message(Command("my_tracking"))

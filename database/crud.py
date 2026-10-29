@@ -107,15 +107,13 @@ async def get_or_create_user(
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
 
-    is_admin = user_id in settings.admin_id_set
     now = datetime.now(timezone.utc)
     if user is None:
         user = User(
             id=user_id,
             username=username,
             language=normalize_lang(language_code),
-            is_pro=is_admin,
-            pro_until=None,
+            is_pro=False,
         )
         session.add(user)
         try:
@@ -135,11 +133,7 @@ async def get_or_create_user(
         user.language = normalize_lang(language_code)
         changed = True
 
-    if is_admin and (not user.is_pro or user.pro_until is not None):
-        user.is_pro = True
-        user.pro_until = None
-        changed = True
-    elif user.is_pro and user.pro_until is not None:
+    if user.is_pro and user.pro_until is not None:
         pro_until_utc = (
             user.pro_until
             if user.pro_until.tzinfo is not None
@@ -870,7 +864,7 @@ async def grant_lifetime_pro(
     session: AsyncSession,
     user_id: int,
 ) -> User:
-    """Надає користувачу (розробнику/адміністратору) довічну максимальну підписку ⭐️ PRO MAX (pro_until=None)."""
+    """Надає користувачу довічну максимальну підписку ⭐️ PRO (pro_until=None)."""
     await get_or_create_user(session, user_id)
     stmt = _with_for_update_if_supported(select(User).where(User.id == user_id), session)
     user = (await session.execute(stmt)).scalar_one()
@@ -879,6 +873,22 @@ async def grant_lifetime_pro(
     await session.commit()
     await session.refresh(user)
     return user
+
+
+async def redeem_promo_code(
+    session: AsyncSession,
+    user_id: int,
+    code: str,
+) -> User | None:
+    """
+    Перевіряє введений промокод (нечутливо до регістру та пробілів) і,
+    якщо він дійсний, активує для користувача довічний тариф ⭐️ PRO (Lifetime).
+    Повертає оновлений об'єкт User або None, якщо промокод недійсний.
+    """
+    clean_code = (code or "").strip().upper()
+    if not clean_code or clean_code not in settings.valid_promo_codes:
+        return None
+    return await grant_lifetime_pro(session, user_id)
 
 
 async def activate_user_pro(

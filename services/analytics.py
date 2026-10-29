@@ -387,7 +387,7 @@ def render_dashboard_card(db_user: User, items_count: int = 0) -> str:
     lang = normalize_lang(db_user.language)
     max_limit = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
     tier = (
-        "👑 PRO MAX (∞)"
+        "⭐️ PRO (∞)"
         if (db_user.has_active_pro and db_user.pro_until is None)
         else ("⭐️ PRO" if db_user.has_active_pro else "Free")
     )
@@ -1377,7 +1377,7 @@ def render_settings_card(db_user: User, items_count: int = 0) -> str:
     lang = normalize_lang(db_user.language)
     max_limit = settings.pro_max_products if db_user.has_active_pro else settings.free_max_products
     tier = (
-        "👑 PRO MAX (∞)"
+        "⭐️ PRO (∞)"
         if (db_user.has_active_pro and db_user.pro_until is None)
         else ("⭐️ PRO" if db_user.has_active_pro else "Free")
     )
@@ -1749,9 +1749,9 @@ async def render_pro_offer_card(
 
     if db_user.has_active_pro and db_user.pro_until is None:
         status_line = {
-            "uk": f"👑 <b>Ваш статус: ⭐️ PRO MAX · Довічний (Розробник) · <code>{used_count}/{pro_max}</code> товарів</b>",
-            "en": f"👑 <b>Your status: ⭐️ PRO MAX · Lifetime (Developer) · <code>{used_count}/{pro_max}</code> items</b>",
-            "ru": f"👑 <b>Ваш статус: ⭐️ PRO MAX · Пожизненный (Разработчик) · <code>{used_count}/{pro_max}</code> товаров</b>",
+            "uk": f"👑 <b>Ваш статус: ⭐️ PRO · Довічний (∞) · <code>{used_count}/{pro_max}</code> товарів</b>",
+            "en": f"👑 <b>Your status: ⭐️ PRO · Lifetime (∞) · <code>{used_count}/{pro_max}</code> items</b>",
+            "ru": f"👑 <b>Ваш статус: ⭐️ PRO · Пожизненный (∞) · <code>{used_count}/{pro_max}</code> товаров</b>",
         }.get(lang, "")
     elif db_user.has_active_pro and db_user.pro_until is not None:
         until_str = db_user.pro_until.strftime("%d.%m.%Y")
@@ -1835,6 +1835,76 @@ async def render_pro_offer_card(
         )
 
     return text
+
+
+def render_promo_prompt_card(lang: str = "uk") -> str:
+    """Картка запрошення ввести промокод для активації довічного плану ⭐️ PRO."""
+    lang = normalize_lang(lang)
+    if lang == "en":
+        return (
+            "🎟 <b>ACTIVATE PROMO CODE</b>\n"
+            "──────────────────────────────────\n"
+            "Have a promo code for <b>Lifetime ⭐️ PRO</b>?\n\n"
+            "✍️ <b>Simply send your promo code in a message right now</b>\n"
+            "<i>(or use command <code>/promo CODE</code>)</i>"
+        )
+    if lang == "ru":
+        return (
+            "🎟 <b>АКТИВАЦИЯ ПРОМОКОДА</b>\n"
+            "──────────────────────────────────\n"
+            "У вас есть промокод на <b>пожизненный тариф ⭐️ PRO</b>?\n\n"
+            "✍️ <b>Просто напишите промокод ответным сообщением в чат</b>\n"
+            "<i>(или введите <code>/promo КОД</code>)</i>"
+        )
+    return (
+        "🎟 <b>АКТИВАЦІЯ ПРОМОКОДУ</b>\n"
+        "──────────────────────────────────\n"
+        "Маєте промокод на відкриття <b>довічного плану ⭐️ PRO</b>?\n\n"
+        "✍️ <b>Просто напишіть ваш промокод повідомленням у цей чат</b>\n"
+        "<i>(або введіть команду <code>/promo КОД</code>)</i>"
+    )
+
+
+def render_promo_success_card(db_user: User, code: str, items_count: int = 0) -> str:
+    """Картка успішної активації промокоду на довічний тариф ⭐️ PRO."""
+    lang = normalize_lang(db_user.language)
+    clean_code = html.escape(code.strip().upper())
+    pro_max = settings.pro_max_products
+    if lang == "en":
+        return (
+            "🎉 <b>PROMO CODE ACTIVATED!</b>\n"
+            "──────────────────────────────────\n"
+            f"🎟 <b>Promo code:</b> <code>{clean_code}</code>\n"
+            "👑 <b>Plan unlocked:</b> <code>⭐️ PRO · Lifetime (∞)</code>\n"
+            f"📦 <b>Products limit:</b> <code>{items_count}/{pro_max}</code>\n"
+            "⚡️ <b>Price checks:</b> <code>every 12h (2× faster)</code>\n"
+            "🧠 <b>AI Price Advisor, Bulk Import & CSV:</b> <code>ENABLED ✅</code>\n"
+            "──────────────────────────────────\n"
+            "✨ <i>Your Lifetime PRO plan is permanently active!</i>"
+        )
+    if lang == "ru":
+        return (
+            "🎉 <b>ПРОМОКОД УСПЕШНО АКТИВИРОВАН!</b>\n"
+            "──────────────────────────────────\n"
+            f"🎟 <b>Промокод:</b> <code>{clean_code}</code>\n"
+            "👑 <b>Открыт тариф:</b> <code>⭐️ PRO · Пожизненный (∞)</code>\n"
+            f"📦 <b>Лимит товаров:</b> <code>{items_count}/{pro_max}</code>\n"
+            "⚡️ <b>Проверка цен:</b> <code>каждые 12 ч (2× быстрее)</code>\n"
+            "🧠 <b>AI-Прогноз, Пакетный импорт и CSV:</b> <code>ВКЛЮЧЕНО ✅</code>\n"
+            "──────────────────────────────────\n"
+            "✨ <i>Доступ к плану ⭐️ PRO закреплён за вашим аккаунтом навсегда!</i>"
+        )
+    return (
+        "🎉 <b>ПРОМОКОД УСПІШНО АКТИВОВАНО!</b>\n"
+        "──────────────────────────────────\n"
+        f"🎟 <b>Промокод:</b> <code>{clean_code}</code>\n"
+        "👑 <b>Відкрито план:</b> <code>⭐️ PRO · Довічний (∞)</code>\n"
+        f"📦 <b>Ліміт товарів:</b> <code>{items_count}/{pro_max}</code>\n"
+        "⚡️ <b>Перевірка цін:</b> <code>кожні 12 год (2× швидше)</code>\n"
+        "🧠 <b>AI-Прогноз, Пакетний імпорт (до 10 лінків) та CSV:</b> <code>УВІМКНЕНО ✅</code>\n"
+        "──────────────────────────────────\n"
+        "✨ <i>Довічний план ⭐️ PRO закріплено за вашим акаунтом назавжди!</i>"
+    )
 
 
 async def render_user_stats_text(session: AsyncSession, db_user: User) -> str:

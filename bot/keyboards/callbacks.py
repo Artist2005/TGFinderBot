@@ -27,6 +27,7 @@ class OnboardingCallback(CallbackData, prefix="onb"):
         "compare",
         "add_guide",
         "search_prompt",
+        "promo_code",
         "admin_check_now",
     ]
     page: int = 1

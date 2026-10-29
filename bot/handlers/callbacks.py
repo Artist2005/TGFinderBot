@@ -16,7 +16,7 @@ from bot.handlers.commands import (
     render_my_tracking_text_and_kb,
     render_user_stats_text,
 )
-from bot.handlers.links import TargetPriceState, build_product_caption_with_30d_stats
+from bot.handlers.links import PromoCodeState, TargetPriceState, build_product_caption_with_30d_stats
 from bot.i18n import fmt_money, t
 from bot.keyboards.callbacks import (
     LanguageCallback,
@@ -37,6 +37,7 @@ from bot.keyboards.inline import (
     build_price_alert_keyboard,
     build_pro_offer_keyboard,
     build_product_card_keyboard,
+    build_promo_input_keyboard,
     build_referral_keyboard,
     build_settings_keyboard,
     build_start_keyboard,
@@ -58,6 +59,7 @@ from services.analytics import (
     render_dashboard_card,
     render_delete_confirm_card,
     render_pro_offer_card,
+    render_promo_prompt_card,
     render_quick_compare_card,
     render_settings_card,
     render_target_price_card,
@@ -250,15 +252,19 @@ async def handle_settings_callback(
 async def handle_onboarding_callback(
     callback: CallbackQuery,
     callback_data: OnboardingCallback,
+    state: FSMContext,
     session: AsyncSession,
     db_user: User,
 ) -> None:
-    """Обробляє кнопки навігації, статистики, гарячих знижок, порівняння, демо-товару та CSV-експорту."""
+    """Обробляє кнопки навігації, статистики, гарячих знижок, порівняння, промокоду та CSV-експорту."""
     action = callback_data.action
     lang = db_user.language
     if callback.message is None:
         await callback.answer()
         return
+
+    if action != "promo_code":
+        await state.clear()
 
     if action in {"main_menu", "how_it_works"}:
         await callback.answer()
@@ -267,6 +273,16 @@ async def handle_onboarding_callback(
             callback,
             render_dashboard_card(db_user, items_count=items_count),
             reply_markup=build_start_keyboard(lang, items_count=items_count),
+        )
+        return
+
+    if action == "promo_code":
+        await state.set_state(PromoCodeState.waiting_for_code)
+        await callback.answer("🎟 Введіть промокод")
+        await _smart_render(
+            callback,
+            render_promo_prompt_card(lang),
+            reply_markup=build_promo_input_keyboard(lang),
         )
         return
 

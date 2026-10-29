@@ -874,7 +874,7 @@ def build_top_drops_keyboard(
 
 
 def build_pro_offer_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
-    """Клавіатура оформлення PRO-підписки (30 днів / 90 днів ХІТ -20% / 365 днів VIP -40% / рефералка)."""
+    """Клавіатура оформлення PRO-підписки (30 днів / 90 днів ХІТ -20% / 365 днів VIP -40% / Промокод / Рефералка)."""
     lang = normalize_lang(lang)
     stars_30 = settings.pro_price_stars
     stars_90 = max(1, int(round(stars_30 * 2.4)))
@@ -884,16 +884,19 @@ def build_pro_offer_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
         btn_30 = f"⚡️ PRO 30 Days — {stars_30} ⭐️"
         btn_90 = f"🔥 PRO 90 Days (-20% BEST) — {stars_90} ⭐️"
         btn_365 = f"👑 PRO 365 Days (-40% VIP) — {stars_365} ⭐️"
+        btn_promo = "🎟 Enter Promo Code"
         btn_ref = "🎁 Get +7 Days PRO per Friend"
     elif lang == "ru":
         btn_30 = f"⚡️ PRO на 30 дней — {stars_30} ⭐️"
         btn_90 = f"🔥 PRO на 90 дней (-20% ХИТ) — {stars_90} ⭐️"
         btn_365 = f"👑 PRO на 365 дней (-40% VIP) — {stars_365} ⭐️"
+        btn_promo = "🎟 Ввести промокод"
         btn_ref = "🎁 Получить +7 дней PRO за друга"
     else:
         btn_30 = f"⚡️ PRO на 30 днів — {stars_30} ⭐️"
         btn_90 = f"🔥 PRO на 90 днів (-20% ХІТ) — {stars_90} ⭐️"
         btn_365 = f"👑 PRO на 365 днів (-40% VIP) — {stars_365} ⭐️"
+        btn_promo = "🎟 Ввести промокод"
         btn_ref = "🎁 Отримати +7 днів PRO за друга"
 
     builder = InlineKeyboardBuilder()
@@ -917,6 +920,12 @@ def build_pro_offer_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
     )
     builder.row(
         InlineKeyboardButton(
+            text=btn_promo,
+            callback_data=OnboardingCallback(action="promo_code").pack(),
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
             text=btn_ref,
             callback_data=OnboardingCallback(action="referral").pack(),
         )
@@ -925,6 +934,28 @@ def build_pro_offer_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text=t("ibtn_my_products", lang),
             callback_data=OnboardingCallback(action="my_tracking", page=1).pack(),
+        ),
+        InlineKeyboardButton(
+            text=t("ibtn_main_menu", lang),
+            callback_data=OnboardingCallback(action="main_menu").pack(),
+        ),
+    )
+    return builder.as_markup()
+
+
+def build_promo_input_keyboard(lang: str = "uk") -> InlineKeyboardMarkup:
+    """Клавіатура на екрані введення промокоду (Назад до тарифів / Головне меню)."""
+    lang = normalize_lang(lang)
+    back_lbl = {
+        "uk": "⬅️ До тарифів PRO",
+        "en": "⬅️ Back to PRO Plans",
+        "ru": "⬅️ К тарифам PRO",
+    }.get(lang, "⬅️ До тарифів PRO")
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=back_lbl,
+            callback_data=OnboardingCallback(action="pro_menu").pack(),
         ),
         InlineKeyboardButton(
             text=t("ibtn_main_menu", lang),

@@ -18,7 +18,12 @@ from aiogram.types import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.i18n import fmt_money, fmt_money_with_uah, t
-from bot.keyboards.inline import build_pro_offer_keyboard, build_product_card_keyboard
+from bot.keyboards.inline import (
+    build_pro_offer_keyboard,
+    build_product_card_keyboard,
+    build_promo_input_keyboard,
+    build_start_keyboard,
+)
 from bot.keyboards.reply import (
     ALL_BTN_ADD_PRODUCT,
     ALL_BTN_ANALYTICS,
@@ -39,6 +44,7 @@ from services.analytics import (
     embed_invisible_image_link,
     render_my_tracking_text_and_kb,
     render_pro_offer_card,
+    render_promo_success_card,
     render_search_results_card,
 )
 from services.scraper import (
@@ -64,6 +70,60 @@ class TargetPriceState(StatesGroup):
     """FSM-стан для введення бажаної ціни."""
 
     waiting_for_price = State()
+
+
+class PromoCodeState(StatesGroup):
+    """FSM-стан для введення промокоду на довічний тариф ⭐️ PRO."""
+
+    waiting_for_code = State()
+
+
+@router.message(PromoCodeState.waiting_for_code, F.text)
+async def handle_promo_code_input(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    db_user: User,
+) -> None:
+    """Обробляє введений користувачем промокод після натискання «🎟 Ввести промокод» або /promo."""
+    lang = db_user.language
+    raw_text = (message.text or "").strip()
+
+    if (
+        raw_text.lower() in {"/cancel", "скасувати", "відміна", "отмена", "cancel"}
+        or "http://" in raw_text
+        or "https://" in raw_text
+    ):
+        await state.clear()
+        if "http://" not in raw_text and "https://" not in raw_text:
+            await message.answer(t("cancelled", lang))
+        return
+
+    updated_user = await crud.redeem_promo_code(session, db_user.id, raw_text)
+    if updated_user is not None:
+        await state.clear()
+        items_count = await crud.count_user_subscriptions(session, updated_user.id)
+        await message.answer(
+            render_promo_success_card(updated_user, raw_text, items_count=items_count),
+            reply_markup=build_start_keyboard(lang, items_count=items_count),
+        )
+        return
+
+    invalid_msg = {
+        "uk": (
+            "❌ <b>Промокод не знайдено або він недійсний.</b>\n"
+            "Перевірте правильність написання та надішліть промокод ще раз або поверніться до меню:"
+        ),
+        "en": (
+            "❌ <b>Invalid promo code.</b>\n"
+            "Please check the spelling and send the code again, or return to the menu:"
+        ),
+        "ru": (
+            "❌ <b>Промокод не найден или недействителен.</b>\n"
+            "Проверьте правильность ввода и отправьте промокод ещё раз или вернитесь в меню:"
+        ),
+    }.get(lang, "")
+    await message.answer(invalid_msg, reply_markup=build_promo_input_keyboard(lang))
 
 
 @router.message(TargetPriceState.waiting_for_price, F.text)
@@ -562,6 +622,16 @@ async def handle_text_product_search(
         return
 
     lang = db_user.language
+    if raw_text.upper() in settings.valid_promo_codes:
+        updated_user = await crud.redeem_promo_code(session, db_user.id, raw_text)
+        if updated_user is not None:
+            items_count = await crud.count_user_subscriptions(session, updated_user.id)
+            await message.answer(
+                render_promo_success_card(updated_user, raw_text, items_count=items_count),
+                reply_markup=build_start_keyboard(lang, items_count=items_count),
+            )
+            return
+
     query = " ".join(raw_text.split())
     if len(query) < 2 or len(query) > 120:
         return

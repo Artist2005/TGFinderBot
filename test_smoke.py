@@ -176,6 +176,10 @@ async def run_smoke_tests(custom_url: str | None = None) -> None:
         cmp_text, cmp_kb = await render_quick_compare_card(session, user)
         user = await crud.toggle_user_dnd(session, user.id)
         user = await crud.toggle_user_notifications(session, user.id)
+        invalid_promo = await crud.redeem_promo_code(session, user.id, "WRONG_CODE_000")
+        valid_promo = await crud.redeem_promo_code(session, user.id, "roman_pro")
+        assert invalid_promo is None
+        assert valid_promo is not None and valid_promo.has_active_pro and valid_promo.pro_until is None
         reply_kb = build_main_reply_keyboard("uk", items_count=subs_count)
         prod_kb = build_product_card_keyboard(
             product_id=product.id,

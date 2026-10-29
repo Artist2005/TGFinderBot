@@ -39,11 +39,11 @@ class Settings(BaseSettings):
         description="Базовий URL CPA-мережі (наприклад, https://rdr.salesdoubler.com.ua/in/offer/1234/)",
     )
 
-    # --- Адміністратори та Розробник (довічна максимальна підписка PRO MAX) ---
-    admin_ids: str = Field(
-        default="",
-        alias="ADMIN_IDS",
-        description="Список Telegram ID розробника/адміністраторів через кому (напр. 123456789)",
+    # --- Промокоди для активації довічного тарифу PRO ---
+    lifetime_promo_codes: str = Field(
+        default="ROMAN_PRO,CLIPSNAG_VIP,VIP2026,FOREVER_PRO",
+        alias="LIFETIME_PROMO_CODES",
+        description="Список промокодів через кому, які відкривають довічний план ⭐️ PRO",
     )
 
     # --- Бізнес-логіка та ліміти Freemium / Pro ---
@@ -53,13 +53,13 @@ class Settings(BaseSettings):
     pro_duration_days: int = Field(default=30, alias="PRO_DURATION_DAYS")
 
     @property
-    def admin_id_set(self) -> set[int]:
-        """Повертає множину числових Telegram ID розробника/адміністраторів."""
-        result: set[int] = set()
-        for part in (self.admin_ids or "").replace(";", ",").split(","):
-            clean = part.strip()
-            if clean.isdigit():
-                result.add(int(clean))
+    def valid_promo_codes(self) -> set[str]:
+        """Повертає множину активних промокодів у верхньому регістрі для відкриття довічного PRO."""
+        result: set[str] = set()
+        for part in (self.lifetime_promo_codes or "").replace(";", ",").split(","):
+            clean = part.strip().upper()
+            if clean:
+                result.add(clean)
         return result
 
     # --- Інтервали перевірки цін (Free: раз на добу = 24 год, PRO: кожні 12 год = 720 хв) ---
