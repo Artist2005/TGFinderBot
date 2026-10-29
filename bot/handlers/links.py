@@ -48,12 +48,14 @@ from services.scraper import (
     ScraperError,
     SSRFBlockedError,
     format_marketplace_label,
+    format_marketplace_name,
     normalize_url,
     scraper_service,
 )
 from services.search import SearchOffer, _cache_offer, normalize_search_query, search_products_by_name
 
 router = Router(name="links_router")
+_CACHED_BOT_USERNAME: str | None = None
 
 
 class TargetPriceState(StatesGroup):
@@ -358,48 +360,78 @@ async def handle_inline_query(
     Дозволяє миттєво знайти товар і відправити в чат красиву картку з ціною, Deal Score
     та прямою кнопкою «📉 Відстежувати ціну в боті».
     """
+    global _CACHED_BOT_USERNAME
     lang = db_user.language
     query = (inline_query.query or "").strip()
 
-    bot_username = "PriceTrackerBot"
-    if inline_query.bot:
+    if not _CACHED_BOT_USERNAME and inline_query.bot:
         try:
             me = await inline_query.bot.get_me()
             if me.username:
-                bot_username = me.username
+                _CACHED_BOT_USERNAME = me.username
         except Exception:
             pass
+    bot_username = _CACHED_BOT_USERNAME or "clipsnag_bot"
 
     results: list[InlineQueryResultArticle] = []
 
-    if len(query) >= 2:
+    # Якщо користувач натиснув кнопку «📤 Поділитися знахідкою» (де вставляється готовий текст із 🔥 або посиланням)
+    if query.startswith("🔥") or "t.me/" in query:
+        ref_link = f"https://t.me/{bot_username}?start=ref_{db_user.id}"
+        btn_open_lbl = {
+            "uk": "📉 Відстежувати знижки в боті (+3д PRO)",
+            "en": "📉 Track Deals in Bot (+3d PRO)",
+            "ru": "📉 Отслеживать скидки в боте (+3д PRO)",
+        }.get(lang, "📉 Відстежувати знижки в боті (+3д PRO)")
+        results.append(
+            InlineQueryResultArticle(
+                id="viral_share_card",
+                title="📤 Надіслати рекомендацію в цей чат",
+                description=query[:90],
+                input_message_content=InputTextMessageContent(
+                    message_text=html.escape(query),
+                    parse_mode="HTML",
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text=btn_open_lbl, url=ref_link)]]
+                ),
+            )
+        )
+
+    offers: list[SearchOffer] = []
+    if len(query) >= 2 and not query.startswith("🔥") and "t.me/" not in query:
         offers = await search_products_by_name(session, query, limit=8)
     else:
-        # Якщо користувач просто ввів @BotName без тексту — показуємо гарячі знижки з БД
-        db_prods = await crud.search_products_in_db(session, "a", limit=6)
-        if not db_prods:
-            drops = await crud.get_top_price_drops(session, user_id=db_user.id, limit=5, force_live=False)
-            db_prods = [d["product"] for d in drops]
-        from services.search import _cache_offer, SearchOffer
-        offers = [
-            _cache_offer(
-                SearchOffer(
-                    token="",
-                    title=p.title,
-                    url=p.url,
-                    price=Decimal(str(p.current_price)),
-                    old_price=None,
-                    currency=p.currency,
-                    marketplace=p.marketplace,
-                    is_available=getattr(p, "is_available", True),
-                    image_url=p.image_url,
-                    product_id=p.id,
+        # Якщо користувач щойно набрав @clipsnag_bot (ще без тексту) — показуємо його товари + популярні хіти
+        user_subs = await crud.get_user_subscriptions(session, db_user.id)
+        for s in user_subs[:4]:
+            p = s.product
+            offers.append(
+                _cache_offer(
+                    SearchOffer(
+                        token="",
+                        title=p.title,
+                        url=p.url,
+                        marketplace=p.marketplace,
+                        price=Decimal(str(p.current_price)),
+                        old_price=None,
+                        currency=p.currency,
+                        is_available=getattr(p, "is_available", True),
+                        image_url=p.image_url,
+                        product_id=p.id,
+                    )
                 )
             )
-            for p in db_prods[:6]
-        ]
+        if len(offers) < 5:
+            default_hits = await search_products_by_name(session, "AirPods", limit=6)
+            seen_u = {o.url for o in offers}
+            for h in default_hits:
+                if h.url not in seen_u:
+                    seen_u.add(h.url)
+                    offers.append(h)
 
     for idx, off in enumerate(offers[:8], start=1):
+        mp_short = format_marketplace_name(off.marketplace)
         mp_label = format_marketplace_label(off.marketplace)
         price_fmt = fmt_money_with_uah(off.price, off.currency)
         old_part = ""
@@ -415,11 +447,13 @@ async def handle_inline_query(
             old_price=off.old_price,
         )
 
-        deep_link = (
-            f"https://t.me/{bot_username}?start=track_{off.product_id}"
-            if off.product_id
-            else f"https://t.me/{bot_username}?start=ref_{db_user.id}"
-        )
+        if off.product_id:
+            deep_link = f"https://t.me/{bot_username}?start=track_{off.product_id}"
+        elif off.token:
+            deep_link = f"https://t.me/{bot_username}?start=tok_{off.token}"
+        else:
+            deep_link = f"https://t.me/{bot_username}?start=ref_{db_user.id}"
+
         btn_track_lbl = {
             "uk": "📉 Відстежувати ціну в боті",
             "en": "📉 Track Price in Bot",
@@ -429,15 +463,15 @@ async def handle_inline_query(
             "uk": "🛒 Відкрити в магазині",
             "en": "🛒 Open in Store",
             "ru": "🛒 Открыть в магазине",
-        }.get(lang, "🛒 Відкрити в магазині")
+        }.get(lang, "🛒 Відкрити в магазине")
 
         msg_text = (
+            f"💰 <b><code>{price_fmt}</code></b>{old_part} · 🏪 <b>{mp_short}</b>\n"
+            f"──────────────────────\n"
             f"🛍 <b>{html.escape(off.title[:85])}</b>\n"
-            f"──────────────────────────────────\n"
-            f"🏪 <b>Магазин:</b> {mp_label}\n"
-            f"💰 <b>Ціна зараз:</b> <code>{price_fmt}</code>{old_part}\n"
+            f"📍 <b>Магазин:</b> {mp_label}\n"
             f"⚖️ <b>Deal Score:</b> <code>{score}/100</code>\n"
-            f"──────────────────────────────────\n"
+            f"──────────────────────\n"
             f"🤖 <i>Знайдено через @{bot_username} — розумний моніторинг знижок 24/7</i>"
         )
 
@@ -448,22 +482,50 @@ async def handle_inline_query(
             ]
         )
 
+        thumb = None
+        if off.image_url and off.image_url.startswith("https://"):
+            lower_img = off.image_url.lower().split("?")[0]
+            if lower_img.endswith((".jpg", ".jpeg", ".png")):
+                thumb = off.image_url
+
         results.append(
             InlineQueryResultArticle(
-                id=f"offer_{idx}_{off.token}",
-                title=f"{price_fmt} · {off.title[:48]}",
-                description=f"{mp_label} · Deal Score: {score}/100 · Натисніть, щоб надіслати в чат",
-                thumbnail_url=off.image_url if (off.image_url and off.image_url.startswith("http")) else None,
+                id=f"offer_{idx}_{off.token or idx}",
+                title=f"{price_fmt} · {mp_short} · {off.title[:42]}",
+                description=f"⚖️ Deal Score: {score}/100 · Натисніть, щоб відправити в чат",
+                thumbnail_url=thumb,
                 input_message_content=InputTextMessageContent(
                     message_text=msg_text,
                     parse_mode="HTML",
-                    disable_web_page_preview=False,
                 ),
                 reply_markup=kb,
             )
         )
 
-    await inline_query.answer(results, cache_time=60, is_personal=True)
+    if not results:
+        ref_link = f"https://t.me/{bot_username}?start=ref_{db_user.id}"
+        results.append(
+            InlineQueryResultArticle(
+                id="fallback_open_bot",
+                title=f"🔍 Знайти «{query[:35]}» у @{bot_username}",
+                description="Натисніть, щоб відкрити бота та знайти найнижчу ціну",
+                input_message_content=InputTextMessageContent(
+                    message_text=(
+                        f"🔍 Шукаю найнижчу ціну на <b>{html.escape(query[:60])}</b> у @{bot_username}!\n"
+                        f"👉 <a href=\"{ref_link}\">Перевірити ціни та знижки 24/7</a>"
+                    ),
+                    parse_mode="HTML",
+                ),
+            )
+        )
+
+    try:
+        await inline_query.answer(results, cache_time=5, is_personal=True)
+    except Exception:
+        # Якщо Telegram відхилив якусь іконку чи URL — відправляємо без thumbnail_url
+        for r in results:
+            r.thumbnail_url = None
+        await inline_query.answer(results, cache_time=5, is_personal=True)
 
 
 @router.message(F.text)

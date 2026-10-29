@@ -114,6 +114,26 @@ async def cmd_start(
             await message.answer(w_text, reply_markup=w_kb)
             return
 
+    # Deep-link: Підписка на товар із живого Inline-пошуку за токеном (/start tok_<token>)
+    if args.startswith("tok_"):
+        from services.search import get_cached_offer
+
+        raw_tok = args.removeprefix("tok_").strip()
+        cached_off = get_cached_offer(raw_tok)
+        if cached_off is not None:
+            upserted = await crud.upsert_product_with_initial_history(
+                session,
+                clean_url=cached_off.url,
+                title=cached_off.title,
+                image_url=cached_off.image_url,
+                price=cached_off.price,
+                currency=cached_off.currency,
+                marketplace=cached_off.marketplace,
+                old_price=cached_off.old_price,
+                is_available=cached_off.is_available,
+            )
+            args = f"track_{upserted.id}"
+
     # Deep-link: Підписка на товар із Inline-картки в чаті (/start track_<product_id>)
     if args.startswith("track_"):
         raw_pid = args.removeprefix("track_").strip()
