@@ -1,0 +1,37 @@
+# Секрети та конфігурація оточення
+.env
+.env.*
+!.env.example
+
+# Віртуальне середовище Python
+.venv/
+venv/
+env/
+
+# Кеш Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Локальні бази даних SQLite та PID-файли
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+.bot.pid
+
+# Логи та тимчасові файли
+*.log
+logs/
+tmp/
+
+# IDE та ОС
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
