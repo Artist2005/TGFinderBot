@@ -4,9 +4,11 @@ import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
 from decimal import Decimal
+from difflib import SequenceMatcher
 import hashlib
 import json
 import logging
+import random
 import re
 import time
 
@@ -17,11 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.crud import search_products_in_db
 from services.scraper.base import _BROWSER_PROFILES, ScrapedProduct
 from services.scraper.normalizer import normalize_url
-import random
 
 
 def get_random_user_agent() -> str:
     return random.choice(_BROWSER_PROFILES)["User-Agent"]
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ class SearchOffer:
     marketplace: str
     image_url: str | None
     is_available: bool = True
+    product_id: int | None = None
 
     def to_scraped_product(self) -> ScrapedProduct:
         return ScrapedProduct(
@@ -64,11 +67,19 @@ def _make_token(url: str) -> str:
     return hashlib.sha1(url.encode("utf-8")).hexdigest()[:8]
 
 
-def _register_offer(offer: SearchOffer) -> None:
+def _register_offer(offer: SearchOffer) -> SearchOffer:
+    if not offer.token:
+        offer.token = _make_token(offer.url)
     _OFFER_BY_TOKEN[offer.token] = offer
     _OFFER_BY_TOKEN.move_to_end(offer.token)
     while len(_OFFER_BY_TOKEN) > _MAX_OFFER_TOKENS:
         _OFFER_BY_TOKEN.popitem(last=False)
+    return offer
+
+
+def _cache_offer(offer: SearchOffer) -> SearchOffer:
+    """Реєструє пропозицію в кеші токенів та повертає її (для Inline-режиму та кнопок)."""
+    return _register_offer(offer)
 
 
 def get_cached_search_offer(token: str) -> SearchOffer | None:
@@ -89,18 +100,399 @@ def _parse_dec(val: object) -> Decimal | None:
         return None
 
 
-def _is_relevant_title(title: str, query: str) -> bool:
-    """Перевіряє, чи містить назва товару ключові слова запиту."""
+# Таблиця перемикання розкладки клавіатури (UA/RU -> EN QWERTY)
+_CYR_TO_LAT_LAYOUT = str.maketrans(
+    "йцукенгшщзхїфівапролджєячсмитьбюыэъЙЦУКЕНГШЩЗХЇФІВАПРОЛДЖЄЯЧСМИТЬБЮЫЭЪ",
+    "qwertyuiop[]asdfghjkl;'zxcvbnm,.s']QWERTYUIOP[]ASDFGHJKL;'ZXCVBNM,.S']",
+)
+
+# Словник популярних мультимовних синонімів, сленгу, транслитерацій та частих помилок
+_MULTIWORD_PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    (r"\bair\s+pods\b", "AirPods"),
+    (r"\bear\s+pods\b", "EarPods"),
+    (r"\bа[іий]р\s+подс\b", "AirPods"),
+    (r"\bе[іий]р\s+подс\b", "AirPods"),
+    (r"\bmac\s+book\b", "MacBook"),
+    (r"\bмак\s+бук\b", "MacBook"),
+    (r"\bplay\s+station\b", "PlayStation"),
+    (r"\bплей\s+стейш[еи]?н\b", "PlayStation"),
+    (r"\bps\s+5\b", "PlayStation 5"),
+    (r"\bпс\s+5\b", "PlayStation 5"),
+    (r"\bплойка\s*5?\b", "PlayStation 5"),
+    (r"\beco\s+flow\b", "EcoFlow"),
+    (r"\bеко\s+фло[ув]\b", "EcoFlow"),
+    (r"\bэко\s+фло[ув]\b", "EcoFlow"),
+    (r"\bsteam\s+deck\b", "Steam Deck"),
+    (r"\bст[іи]м\s+дек\b", "Steam Deck"),
+    (r"\bепл\s+вотч\b", "Apple Watch"),
+    (r"\bапл\s+вотч\b", "Apple Watch"),
+)
+
+_TOKEN_ALIASES: dict[str, str] = {
+    # AirPods + помилки
+    "airpods": "AirPods",
+    "airpod": "AirPods",
+    "airposd": "AirPods",
+    "airpords": "AirPods",
+    "airpds": "AirPods",
+    "eirpods": "AirPods",
+    "aerpods": "AirPods",
+    "aripods": "AirPods",
+    "aipods": "AirPods",
+    "airpots": "AirPods",
+    "аірподс": "AirPods",
+    "айрподс": "AirPods",
+    "аирподс": "AirPods",
+    "еірподс": "AirPods",
+    "ейрподс": "AirPods",
+    "эирподс": "AirPods",
+    "аірподси": "AirPods",
+    "айрподси": "AirPods",
+    # iPhone + помилки
+    "iphone": "iPhone",
+    "iphon": "iPhone",
+    "iphne": "iPhone",
+    "ipone": "iPhone",
+    "ipohne": "iPhone",
+    "ihpone": "iPhone",
+    "ifon": "iPhone",
+    "ifone": "iPhone",
+    "айфон": "iPhone",
+    "аіфон": "iPhone",
+    "ифон": "iPhone",
+    # iPad / MacBook / Apple
+    "ipad": "iPad",
+    "айпад": "iPad",
+    "аіпад": "iPad",
+    "macbook": "MacBook",
+    "macbok": "MacBook",
+    "makbook": "MacBook",
+    "mcbook": "MacBook",
+    "макбук": "MacBook",
+    "макубк": "MacBook",
+    "apple": "Apple",
+    "aple": "Apple",
+    "appel": "Apple",
+    "епл": "Apple",
+    "апл": "Apple",
+    # Ігрові консолі
+    "ps5": "PlayStation 5",
+    "пс5": "PlayStation 5",
+    "плойка": "PlayStation 5",
+    "playstation": "PlayStation",
+    "playstaton": "PlayStation",
+    "pleystation": "PlayStation",
+    "playstasion": "PlayStation",
+    "плейстейшн": "PlayStation",
+    "плейстейшен": "PlayStation",
+    "xbox": "Xbox",
+    "іксбокс": "Xbox",
+    "иксбокс": "Xbox",
+    "хбокс": "Xbox",
+    "nintendo": "Nintendo",
+    "нінтендо": "Nintendo",
+    "нинтендо": "Nintendo",
+    "switch": "Switch",
+    "світч": "Switch",
+    "свіч": "Switch",
+    "стімдек": "Steam Deck",
+    "стимдек": "Steam Deck",
+    # Зарядні станції
+    "ecoflow": "EcoFlow",
+    "ekoflow": "EcoFlow",
+    "ecofolv": "EcoFlow",
+    "ecoflw": "EcoFlow",
+    "екофлоу": "EcoFlow",
+    "екофлов": "EcoFlow",
+    "экофлоу": "EcoFlow",
+    "bluetti": "Bluetti",
+    "blueti": "Bluetti",
+    "bluetty": "Bluetti",
+    "блюетті": "Bluetti",
+    "блюеті": "Bluetti",
+    "блюєтті": "Bluetti",
+    "блюэтти": "Bluetti",
+    # Смартфони та техніка
+    "samsung": "Samsung",
+    "samung": "Samsung",
+    "samsng": "Samsung",
+    "samsugn": "Samsung",
+    "sumsung": "Samsung",
+    "самсунг": "Samsung",
+    "самсуг": "Samsung",
+    "galaxy": "Galaxy",
+    "гелексі": "Galaxy",
+    "галаксі": "Galaxy",
+    "xiaomi": "Xiaomi",
+    "xiomi": "Xiaomi",
+    "xiami": "Xiaomi",
+    "shaomi": "Xiaomi",
+    "сяомі": "Xiaomi",
+    "ксіомі": "Xiaomi",
+    "ксяомі": "Xiaomi",
+    "сяоми": "Xiaomi",
+    "ксиоми": "Xiaomi",
+    "redmi": "Redmi",
+    "redmy": "Redmi",
+    "редмі": "Redmi",
+    "редми": "Redmi",
+    "poco": "Poco",
+    "поко": "Poco",
+    "dyson": "Dyson",
+    "dayson": "Dyson",
+    "dison": "Dyson",
+    "дайсон": "Dyson",
+    "даісон": "Dyson",
+    "marshall": "Marshall",
+    "marshal": "Marshall",
+    "маршал": "Marshall",
+    "маршалл": "Marshall",
+    "jbl": "JBL",
+    "джейбіель": "JBL",
+    "жбл": "JBL",
+    "garmin": "Garmin",
+    "garmn": "Garmin",
+    "гармін": "Garmin",
+    "гармин": "Garmin",
+    "starlink": "Starlink",
+    "старлінк": "Starlink",
+    "старлинк": "Starlink",
+    "logitech": "Logitech",
+    "logitec": "Logitech",
+    "лоджитек": "Logitech",
+    "hyperx": "HyperX",
+    "хайперікс": "HyperX",
+    "razer": "Razer",
+    "рейзер": "Razer",
+}
+
+_CANONICAL_BRANDS: tuple[str, ...] = (
+    "AirPods",
+    "iPhone",
+    "iPad",
+    "MacBook",
+    "PlayStation",
+    "Nintendo",
+    "Switch",
+    "Steam",
+    "Samsung",
+    "Galaxy",
+    "Xiaomi",
+    "Redmi",
+    "Dyson",
+    "EcoFlow",
+    "Bluetti",
+    "Marshall",
+    "Logitech",
+    "HyperX",
+    "Garmin",
+    "Starlink",
+    "Lenovo",
+)
+
+# Ключові слова дешевих аксесуарів, які треба відсіювати, якщо користувач шукає сам гаджет
+_ACCESSORY_KEYWORDS: tuple[str, ...] = (
+    "чохол",
+    "чехол",
+    "футляр",
+    "кейс для",
+    "case for",
+    "silicone case",
+    "захисне скло",
+    "защитное стекло",
+    "захисна плівка",
+    "защитная пленка",
+    "гідрогелева плівка",
+    "ремінець",
+    "ремешок",
+    "амбушур",
+    "наклейк",
+    "стікер",
+    "карабін",
+    "брелок",
+    "шнурок для",
+    "тримач для",
+    "підставка для",
+    "заглушк",
+    "щітка для чищення",
+    "геймпад",
+    "джойстик",
+    "dualsense",
+    "dualshock",
+    "кабель для",
+    "адаптер для",
+)
+
+
+def _try_fix_wrong_keyboard_layout(word: str) -> str:
+    """
+    Виправляє слово, набране в українській/російській розкладці замість англійської
+    (наприклад, 'фшкзщвы' -> 'airpods', 'шзрщту' -> 'iphone').
+    """
+    if not re.search(r"[а-яіїєґыэъА-ЯІЇЄҐЫЭЪ]", word):
+        return word
+    converted = word.translate(_CYR_TO_LAT_LAYOUT)
+    conv_low = converted.lower()
+    if conv_low in _TOKEN_ALIASES:
+        return _TOKEN_ALIASES[conv_low]
+    for brand in _CANONICAL_BRANDS:
+        if SequenceMatcher(None, conv_low, brand.lower()).ratio() >= 0.80:
+            return brand
+    return word
+
+
+def normalize_search_query(raw_query: str) -> str:
+    """
+    Нормалізує пошуковий запит:
+    - виправляє помилкову розкладку клавіатури ('фшкзщвы' -> 'AirPods');
+    - замінює сленг, кириличну транслитерацію та типові одруківки ('айрподс', 'airposd', 'плойка');
+    - виконує нечітке (fuzzy) виправлення назв брендів за алгоритмом SequenceMatcher.
+    """
+    q = re.sub(r"\s+", " ", (raw_query or "").strip())
+    if not q:
+        return ""
+
+    for pattern, repl in _MULTIWORD_PHRASE_REPLACEMENTS:
+        q = re.sub(pattern, repl, q, flags=re.IGNORECASE)
+
+    tokens = q.split(" ")
+    fixed_tokens: list[str] = []
+
+    for tok in tokens:
+        clean_tok = tok.strip()
+        if not clean_tok:
+            continue
+
+        # 1. Перевірка на помилкову розкладку клавіатури
+        layout_fixed = _try_fix_wrong_keyboard_layout(clean_tok)
+        if layout_fixed != clean_tok:
+            fixed_tokens.append(layout_fixed)
+            continue
+
+        low = clean_tok.lower()
+
+        # 2. Точний збіг зі словником транслитерацій / сленгу / частих помилок
+        if low in _TOKEN_ALIASES:
+            fixed_tokens.append(_TOKEN_ALIASES[low])
+            continue
+
+        # 3. Якщо слово злиплось із цифрою (наприклад 'айфон16', 'airpods4', 'ps5')
+        m_num = re.match(r"^([a-zA-Zа-яА-ЯіїєґІЇЄҐ]{3,})(\d+)$", low)
+        if m_num:
+            prefix, digits = m_num.group(1), m_num.group(2)
+            if prefix in _TOKEN_ALIASES:
+                fixed_tokens.append(f"{_TOKEN_ALIASES[prefix]} {digits}")
+                continue
+
+        # 4. Нечіткий (fuzzy) пошук для латинських слів із помилками (напр. 'airpds', 'ipohne', 'samsugn')
+        if len(low) >= 5 and re.match(r"^[a-z]+$", low):
+            best_brand: str | None = None
+            best_score = 0.0
+            for brand in _CANONICAL_BRANDS:
+                score = SequenceMatcher(None, low, brand.lower()).ratio()
+                if score > best_score:
+                    best_score = score
+                    best_brand = brand
+            if best_brand is not None and best_score >= 0.76:
+                fixed_tokens.append(best_brand)
+                continue
+
+        fixed_tokens.append(clean_tok)
+
+    return re.sub(r"\s+", " ", " ".join(fixed_tokens)).strip()
+
+
+def _is_unwanted_accessory(title: str, query: str) -> bool:
+    """
+    Повертає True, якщо товар є дешевим аксесуаром (чохол, скло, плівка, амбушури),
+    хоча користувач шукав сам основний пристрій (наприклад, 'Airpods' або 'iPhone').
+    """
     t_low = title.lower()
-    words = [w.lower() for w in re.findall(r"[A-Za-zА-Яа-яІіЇїЄєҐґ0-9]{2,}", query)]
-    if not words:
+    q_low = query.lower()
+
+    # Якщо користувач сам явно шукає чохол / скло / ремінець — не фільтруємо
+    for kw in _ACCESSORY_KEYWORDS:
+        if kw in q_low:
+            return False
+
+    for kw in _ACCESSORY_KEYWORDS:
+        if kw in t_low:
+            return True
+
+    # Відсікаємо дротові EarPods, коли користувач шукає бездротові AirPods
+    if "airpods" in q_low and "earpods" in t_low and "airpods" not in t_low:
         return True
-    matched = sum(1 for w in words if w in t_low)
-    return matched >= max(1, (len(words) + 1) // 2)
+
+    return False
 
 
-async def _search_rozetka_api(client: httpx.AsyncClient, query: str, limit: int = 5) -> list[SearchOffer]:
-    """Швидкий пошук через офіційний Search API v6 + Product API Rozetka."""
+def _is_relevant_title(title: str, query: str, normalized_query: str | None = None) -> bool:
+    """
+    Перевіряє релевантність назви товару з підтримкою нечіткого збігу (fuzzy matching),
+    щоб запити з помилками ('airposd', 'айрподс') або з 1 слова ('Airpods') знаходили потрібні товари.
+    """
+    if _is_unwanted_accessory(title, normalized_query or query):
+        return False
+
+    t_low = title.lower()
+    t_words = re.findall(r"[a-zа-яіїєґ0-9]{2,}", t_low)
+
+    check_queries = [q for q in (normalized_query, query) if q]
+    for q_candidate in check_queries:
+        q_words = [w.lower() for w in re.findall(r"[A-Za-zА-Яа-яІіЇїЄєҐґ0-9]{2,}", q_candidate)]
+        if not q_words:
+            return True
+
+        matched = 0
+        for qw in q_words:
+            if qw in t_low:
+                matched += 1
+                continue
+            # Fuzzy-перевірка окремого слова для стійкості до одруківок
+            if len(qw) >= 4 and any(SequenceMatcher(None, qw, tw).ratio() >= 0.74 for tw in t_words):
+                matched += 1
+
+        required = 1 if len(q_words) == 1 else max(1, (len(q_words) + 1) // 2)
+        if matched >= required:
+            return True
+
+    return False
+
+
+async def _fetch_rozetka_goods_list(
+    client: httpx.AsyncClient,
+    search_text: str,
+    headers: dict[str, str],
+) -> list[dict[str, object]]:
+    """Виконує запит до Rozetka Search API v6 і повертає сирий список goods."""
+    resp = await client.get(
+        "https://search.rozetka.com.ua/ua/search/api/v6/",
+        params={
+            "front-type": "xl",
+            "country": "UA",
+            "lang": "ua",
+            "text": search_text.strip(),
+            "redirected": "1",
+        },
+        headers=headers,
+        timeout=2.8,
+    )
+    if resp.status_code != 200:
+        return []
+    payload = resp.json()
+    goods = ((payload.get("data") or {}) if isinstance(payload, dict) else {}).get("goods") or []
+    return goods if isinstance(goods, list) else []
+
+
+async def _search_rozetka_api(
+    client: httpx.AsyncClient,
+    query: str,
+    limit: int = 5,
+) -> list[SearchOffer]:
+    """
+    Швидкий пошук через офіційний Search API v6 + Autocomplete Spellcheck + Product API Rozetka.
+    Автоматично виправляє помилки в запитах через автодоповнення Rozetka, якщо прямий пошук порожній.
+    """
     headers = {
         "User-Agent": get_random_user_agent(),
         "Accept": "application/json, text/plain, */*",
@@ -108,28 +500,45 @@ async def _search_rozetka_api(client: httpx.AsyncClient, query: str, limit: int 
         "Referer": "https://rozetka.com.ua/ua/",
     }
     try:
-        resp = await client.get(
-            "https://search.rozetka.com.ua/ua/search/api/v6/",
-            params={
-                "front-type": "xl",
-                "country": "UA",
-                "lang": "ua",
-                "text": query.strip(),
-                "redirected": "1",
-            },
-            headers=headers,
-            timeout=2.8,
-        )
-        if resp.status_code != 200:
-            return []
-        payload = resp.json()
-        goods = ((payload.get("data") or {}) if isinstance(payload, dict) else {}).get("goods") or []
-        if not isinstance(goods, list) or not goods:
+        goods = await _fetch_rozetka_goods_list(client, query, headers)
+
+        # Якщо через одруківку нічого не знайдено — звертаємось до швидкого Autocomplete API Rozetka
+        if not goods:
+            ac_resp = await client.get(
+                "https://search.rozetka.com.ua/ua/search/api/v6/autocomplete/",
+                params={
+                    "front-type": "xl",
+                    "country": "UA",
+                    "lang": "ua",
+                    "text": query.strip(),
+                },
+                headers=headers,
+                timeout=2.2,
+            )
+            if ac_resp.status_code == 200:
+                ac_content = ((ac_resp.json() or {}).get("data") or {}).get("content") or {}
+                records = ac_content.get("records") or {}
+                ac_goods = records.get("goods") or []
+                if isinstance(ac_goods, list) and ac_goods:
+                    goods = ac_goods
+                else:
+                    changed_text = str(ac_content.get("changedText") or "").strip()
+                    additions = records.get("words_additions") or []
+                    suggested_query = ""
+                    if changed_text and changed_text.lower() != query.strip().lower():
+                        suggested_query = changed_text
+                    elif isinstance(additions, list) and additions and isinstance(additions[0], dict):
+                        suggested_query = str(additions[0].get("name") or "").strip()
+
+                    if suggested_query:
+                        goods = await _fetch_rozetka_goods_list(client, suggested_query, headers)
+
+        if not goods:
             return []
 
         candidate_ids: list[str] = []
         fallback_items: list[dict[str, object]] = []
-        for g in goods[:8]:
+        for g in goods[:10]:
             if not isinstance(g, dict):
                 continue
             gid = str(g.get("id") or "").strip()
@@ -157,6 +566,8 @@ async def _search_rozetka_api(client: httpx.AsyncClient, query: str, limit: int 
             is_avail = sell_status in {"available", "limited", "active"}
             if not title or price is None or not is_avail:
                 return None
+            if _is_unwanted_accessory(title, query):
+                return None
             clean_u, _ = normalize_url(href)
             img = src.get("image_main") if isinstance(src.get("image_main"), str) else None
             tok = _make_token(clean_u)
@@ -175,9 +586,10 @@ async def _search_rozetka_api(client: httpx.AsyncClient, query: str, limit: int 
             )
 
         hydrated = await asyncio.gather(
-            *[_hydrate(gid, raw) for gid, raw in zip(candidate_ids[:limit], fallback_items[:limit])]
+            *[_hydrate(gid, raw) for gid, raw in zip(candidate_ids[: limit + 3], fallback_items[: limit + 3])]
         )
-        return [item for item in hydrated if item is not None]
+        valid = [item for item in hydrated if item is not None]
+        return valid[:limit]
     except Exception as exc:
         logger.debug("Rozetka search skipped for '%s': %s", query, exc)
         return []
@@ -215,7 +627,7 @@ async def _search_prom_ua(client: httpx.AsyncClient, query: str, limit: int = 3)
                 if not isinstance(node, dict):
                     continue
                 if "itemlist" in str(node.get("@type") or "").lower():
-                    for elem in (node.get("itemListElement") or [])[:6]:
+                    for elem in (node.get("itemListElement") or [])[:8]:
                         item_obj = elem.get("item") if isinstance(elem, dict) else None
                         if isinstance(item_obj, dict):
                             items.append(item_obj)
@@ -278,7 +690,7 @@ async def _search_telemart_or_moyo(client: httpx.AsyncClient, query: str, limit:
             return []
         soup = BeautifulSoup(resp.text[:140000], "html.parser")
         offers: list[SearchOffer] = []
-        for card in soup.select(".product-item, .b-i-product")[:5]:
+        for card in soup.select(".product-item, .b-i-product")[:6]:
             title_el = card.select_one(".product-item__title a, .b-i-product-name a, a[title]")
             price_el = card.select_one(".product-cost, .b-i-product-price, [data-price]")
             if not title_el or not price_el:
@@ -315,20 +727,36 @@ async def _search_telemart_or_moyo(client: httpx.AsyncClient, query: str, limit:
 
 
 async def search_products_by_name(
-    query: str,
+    first_arg: AsyncSession | str,
+    second_arg: str | None = None,
     *,
     session: AsyncSession | None = None,
     limit: int = 6,
 ) -> list[SearchOffer]:
     """
-    Паралельно шукає товар за назвою у базі бота та маркетплейсах (Rozetka, Prom, Telemart тощо),
-    сортує за найнижчою ціною і кешує результати на 15 хвилин для миттєвої відповіді.
+    Паралельно шукає товар за назвою у базі бота та маркетплейсах (Rozetka, Prom, Telemart тощо)
+    із підтримкою однослівних запитів («Airpods»), виправленням помилок («airposd», «eirpods»),
+    неправильної розкладки клавіатури («фшкзщвы») та кириличної транслитерації («айрподс», «плойка»).
+
+    Підтримує обидва варіанти виклику:
+    - `await search_products_by_name(session, query, limit=6)`
+    - `await search_products_by_name(query, session=session, limit=6)`
     """
-    clean_query = re.sub(r"\s+", " ", (query or "").strip())
+    if isinstance(first_arg, str):
+        raw_query = first_arg
+        db_session = session
+    else:
+        db_session = first_arg
+        raw_query = second_arg or ""
+
+    clean_query = re.sub(r"\s+", " ", (raw_query or "").strip())
     if len(clean_query) < 2:
         return []
 
-    cache_key = clean_query.lower()
+    norm_query = normalize_search_query(clean_query)
+    effective_query = norm_query or clean_query
+
+    cache_key = effective_query.lower()
     now = time.monotonic()
     cached = _QUERY_CACHE.get(cache_key)
     if cached is not None and (now - cached[0]) < _SEARCH_CACHE_TTL:
@@ -337,12 +765,14 @@ async def search_products_by_name(
         return cached[1][:limit]
 
     db_offers: list[SearchOffer] = []
-    if session is not None:
+    if db_session is not None:
         try:
-            db_products = await search_products_in_db(session, clean_query, limit=4)
+            db_products = list(await search_products_in_db(db_session, effective_query, limit=4))
+            if not db_products and effective_query.lower() != clean_query.lower():
+                db_products = list(await search_products_in_db(db_session, clean_query, limit=4))
             for p in db_products:
                 cur_p = Decimal(str(p.current_price))
-                if cur_p <= Decimal("0"):
+                if cur_p <= Decimal("0") or _is_unwanted_accessory(p.title, effective_query):
                     continue
                 hist_p = [Decimal(str(h.price)) for h in p.price_history if Decimal(str(h.price)) > Decimal("0")]
                 peak_p = max(hist_p) if hist_p else None
@@ -358,15 +788,16 @@ async def search_products_by_name(
                         marketplace=p.marketplace,
                         image_url=p.image_url,
                         is_available=bool(getattr(p, "is_available", True)),
+                        product_id=p.id,
                     )
                 )
         except Exception as exc:
             logger.debug("DB search skipped: %s", exc)
 
     async with httpx.AsyncClient(follow_redirects=True) as client:
-        rz_task = _search_rozetka_api(client, clean_query, limit=5)
-        prom_task = _search_prom_ua(client, clean_query, limit=3)
-        tm_task = _search_telemart_or_moyo(client, clean_query, limit=2)
+        rz_task = _search_rozetka_api(client, effective_query, limit=5)
+        prom_task = _search_prom_ua(client, effective_query, limit=3)
+        tm_task = _search_telemart_or_moyo(client, effective_query, limit=2)
         rz_res, prom_res, tm_res = await asyncio.gather(rz_task, prom_task, tm_task)
 
     combined: list[SearchOffer] = []
@@ -375,14 +806,24 @@ async def search_products_by_name(
     for off in [*db_offers, *rz_res, *prom_res, *tm_res]:
         if off.url in seen_urls or off.price <= Decimal("0"):
             continue
+        if _is_unwanted_accessory(off.title, effective_query):
+            continue
         seen_urls.add(off.url)
         _register_offer(off)
         combined.append(off)
 
+    # Відсікаємо підозріло дешеві випадкові товари (наприклад, кабель за 150 грн, коли основна маса коштує 8 000+ грн)
+    if len(combined) >= 2:
+        max_price = max(float(o.price) for o in combined)
+        if max_price >= 2500.0:
+            filtered_by_floor = [o for o in combined if float(o.price) >= max_price * 0.12]
+            if filtered_by_floor:
+                combined = filtered_by_floor
+
     # Сортуємо: спочатку релевантні за назвою і від найнижчої ціни до вищої
     combined.sort(
         key=lambda item: (
-            0 if _is_relevant_title(item.title, clean_query) else 1,
+            0 if _is_relevant_title(item.title, clean_query, effective_query) else 1,
             float(item.price),
         )
     )

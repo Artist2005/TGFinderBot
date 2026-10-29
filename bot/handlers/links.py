@@ -51,7 +51,7 @@ from services.scraper import (
     normalize_url,
     scraper_service,
 )
-from services.search import search_products_by_name
+from services.search import SearchOffer, _cache_offer, normalize_search_query, search_products_by_name
 
 router = Router(name="links_router")
 
@@ -497,6 +497,8 @@ async def handle_text_product_search(
     }.get(lang, "")
 
     status_msg = await message.answer(searching_txt)
+    norm_q = normalize_search_query(query) or query
     offers = await search_products_by_name(session, query, limit=6)
-    text, kb = render_search_results_card(query, offers, lang=lang)
+    display_q = norm_q if norm_q.lower() != query.lower() else query
+    text, kb = render_search_results_card(display_q, offers, lang=lang)
     await status_msg.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
