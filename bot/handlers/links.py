@@ -541,13 +541,11 @@ async def handle_inline_query(
 
         msg_text = embed_invisible_image_link(
             (
-                f"💰 <b><code>{price_fmt}</code></b>{old_part} · 🏪 <b>{mp_short}</b>\n"
-                f"──────────────────────\n"
-                f"🛍 <b>{html.escape(off.title[:85])}</b>\n"
-                f"📍 <b>Магазин:</b> {mp_label}\n"
-                f"⚖️ <b>Deal Score:</b> <code>{score}/100</code>\n"
-                f"──────────────────────\n"
-                f"🤖 <i>Знайдено через @{bot_username} — розумний моніторинг знижок 24/7</i>"
+                f"<b>{html.escape(off.title[:85])}</b>\n"
+                f"Магазин: <b>{mp_short}</b>\n\n"
+                f"Ціна: <b><code>{price_fmt}</code></b>{old_part}\n"
+                f"Оцінка вигоди (Deal Score): <code>{score}/100</code>\n\n"
+                f"<i>Знайдено через @{bot_username}</i>"
             ),
             off.image_url or off.url,
         )
@@ -565,7 +563,7 @@ async def handle_inline_query(
             InlineQueryResultArticle(
                 id=f"offer_{idx}_{off.token or idx}",
                 title=f"{price_fmt} · {mp_short} · {off.title[:42]}",
-                description=f"⚖️ Deal Score: {score}/100 · Натисніть, щоб відправити в чат",
+                description=f"Deal Score: {score}/100 · Натисніть, щоб відправити в чат",
                 thumbnail_url=thumb,
                 input_message_content=InputTextMessageContent(
                     message_text=msg_text,
@@ -581,12 +579,12 @@ async def handle_inline_query(
         results.append(
             InlineQueryResultArticle(
                 id="fallback_open_bot",
-                title=f"🔍 Знайти «{query[:35]}» у @{bot_username}",
+                title=f"Знайти «{query[:35]}» у @{bot_username}",
                 description="Натисніть, щоб відкрити бота та знайти найнижчу ціну",
                 input_message_content=InputTextMessageContent(
                     message_text=(
-                        f"🔍 Шукаю найнижчу ціну на <b>{html.escape(query[:60])}</b> у @{bot_username}!\n"
-                        f"👉 <a href=\"{ref_link}\">Перевірити ціни та знижки 24/7</a>"
+                        f"Пошук цін на <b>{html.escape(query[:60])}</b> у @{bot_username}\n"
+                        f"<a href=\"{ref_link}\">Перевірити ціни</a>"
                     ),
                     parse_mode="HTML",
                 ),
@@ -637,9 +635,9 @@ async def handle_text_product_search(
         return
 
     searching_txt = {
-        "uk": f"🔍 <b>Шукаю найнижчі ціни на «{html.escape(query[:45])}» у магазинах...</b>",
-        "en": f"🔍 <b>Searching lowest prices for «{html.escape(query[:45])}»...</b>",
-        "ru": f"🔍 <b>Ищу самые низкие цены на «{html.escape(query[:45])}» в магазинах...</b>",
+        "uk": f"🔎 Шукаю «<b>{html.escape(query[:45])}</b>»...",
+        "en": f"🔎 Searching «<b>{html.escape(query[:45])}</b>»...",
+        "ru": f"🔎 Ищу «<b>{html.escape(query[:45])}</b>»...",
     }.get(lang, "")
 
     status_msg = await message.answer(searching_txt)

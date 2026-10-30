@@ -66,7 +66,7 @@ from services.analytics import (
     render_top_drops_card,
 )
 from services.chart_engine import generate_price_chart
-from services.scraper import format_marketplace_label, scraper_service
+from services.scraper import format_marketplace_label, format_marketplace_name, scraper_service
 from services.search import get_cached_search_offer
 
 router = Router(name="callbacks_router")
@@ -605,19 +605,16 @@ async def handle_wishlist_callback(
         await callback.answer("📁")
         hdr = {
             "uk": (
-                "📁 <b>РОЗУМНІ ДОБІРКИ · ВІШЛІСТИ</b>\n"
-                "──────────────────────────────────\n"
-                "Оберіть добірку для цього товару. Бот автоматично порахує загальну вартість усього списку сьогодні та скільки ви зекономите на мінімумі цін:"
+                "📁 <b>Добірки</b>\n\n"
+                "Оберіть категорію для цього товару:"
             ),
             "en": (
-                "📁 <b>SMART WISHLISTS & COLLECTIONS</b>\n"
-                "──────────────────────────────────\n"
-                "Choose a collection for this item. The bot will calculate total list value today vs 30-day lows:"
+                "📁 <b>Collections</b>\n\n"
+                "Choose a collection for this item:"
             ),
             "ru": (
-                "📁 <b>УМНЫЕ ПОДБОРКИ · ВИШЛИСТЫ</b>\n"
-                "──────────────────────────────────\n"
-                "Выберите подборку для этого товара. Бот посчитает общую стоимость списка сегодня и экономию на минимумах:"
+                "📁 <b>Подборки</b>\n\n"
+                "Выберите категорию для этого товара:"
             ),
         }.get(lang, "")
         await _smart_render(
@@ -673,22 +670,19 @@ async def handle_wishlist_callback(
         share_tg = f"https://t.me/share/url?url={quote(share_url)}&text={quote('🎁 Мій вішліст товарів зі знижками у Price Tracker:')}"
         msg = {
             "uk": (
-                "📤 <b>ПОДІЛИТИСЯ ВІШЛІСТОМ З ДРУЗЯМИ</b>\n"
-                "──────────────────────────────────\n"
-                f"🔗 <b>Ваше посилання на вішліст:</b>\n<code>{share_url}</code>\n\n"
-                "✨ Друг зможе переглянути всі ваші товари, актуальні ціни, загальну суму кошика та додати будь-який товар собі в 1 клік!"
+                "📤 <b>Поділитися списком</b>\n\n"
+                f"Посилання на ваш список:\n<code>{share_url}</code>\n\n"
+                "За цим посиланням можна переглянути ваші товари та додати їх собі в 1 клік."
             ),
             "en": (
-                "📤 <b>SHARE WISHLIST WITH FRIENDS</b>\n"
-                "──────────────────────────────────\n"
-                f"🔗 <b>Your wishlist link:</b>\n<code>{share_url}</code>\n\n"
-                "✨ Friends can view your items, live prices, total cart value and copy any item in 1 click!"
+                "📤 <b>Share Wishlist</b>\n\n"
+                f"Your wishlist link:\n<code>{share_url}</code>\n\n"
+                "Friends can view your items and copy any item in 1 click."
             ),
             "ru": (
-                "📤 <b>ПОДЕЛИТЬСЯ ВИШЛИСТОМ С ДРУЗЬЯМИ</b>\n"
-                "──────────────────────────────────\n"
-                f"🔗 <b>Ваша ссылка на вишлист:</b>\n<code>{share_url}</code>\n\n"
-                "✨ Друг увидит ваш список товаров, актуальные цены, общую сумму и сможет добавить любой товар в 1 клик!"
+                "📤 <b>Поделиться списком</b>\n\n"
+                f"Ссылка на ваш список:\n<code>{share_url}</code>\n\n"
+                "По этой ссылке можно посмотреть ваши товары и добавить их себе в 1 клик."
             ),
         }.get(lang, "")
         kb = InlineKeyboardMarkup(
@@ -946,7 +940,7 @@ async def handle_product_action(
             t(
                 "chart_caption",
                 lang,
-                mp_label=format_marketplace_label(prod_with_hist.marketplace),
+                mp_label=format_marketplace_name(prod_with_hist.marketplace),
                 title=html.escape(prod_with_hist.title[:50]),
                 cur=fmt_money(cur, prod_with_hist.currency),
                 min_p=fmt_money(min_p, prod_with_hist.currency),
@@ -1036,7 +1030,7 @@ async def handle_product_action(
         caption = t(
             "chart_caption",
             lang,
-            mp_label=format_marketplace_label(product.marketplace),
+            mp_label=format_marketplace_name(product.marketplace),
             title=short_title,
             cur=fmt_money(cur, product.currency),
             min_p=fmt_money(min_p, product.currency),

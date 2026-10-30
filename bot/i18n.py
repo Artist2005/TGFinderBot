@@ -157,243 +157,217 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # Мої товари / Аналітика / CSV / Адмінка / Реферали
         "empty_tracking": (
-            "📭 <b>СПИСОК ВІДСТЕЖЕННЯ ПОРОЖНІЙ</b>\n"
-            "──────────────────────────────────\n"
-            "Надішліть посилання на товар (Rozetka, Prom, Comfy, Алло, Amazon, Allegro тощо) — "
-            "я одразу покажу <b>30-денну аналітику</b> та почну моніторинг!"
+            "📭 <b>Список порожній</b>\n\n"
+            "Надішліть посилання або назву товару, щоб почати відстеження цін."
         ),
         "my_products_header": (
-            "📦 <b>МОЇ ТОВАРИ У ВІДСТЕЖЕННІ ({used}/{max_limit})</b>\n"
-            "──────────────────────────────────\n"
-            "{rows}\n"
-            "──────────────────────────────────\n"
-            "👆 <i>Натисніть на товар нижче, щоб відкрити картку, графік або задати ціль:</i>"
+            "📦 <b>Мої товари ({used}/{max_limit})</b>\n\n"
+            "{rows}\n\n"
+            "<i>Натисніть на товар нижче для деталей:</i>"
         ),
         "empty_analytics": (
-            "📊 <b>АНАЛІТИКА КОШИКА (30 ДНІВ)</b>\n"
-            "──────────────────────────────────\n"
-            "Список порожній. Додайте перший товар за посиланням, щоб бачити статистику економії за 30 днів!"
+            "📊 <b>Аналітика (30 днів)</b>\n\n"
+            "Список порожній. Додайте перший товар за посиланням."
         ),
         "analytics_item_row": (
-            "• {mp_label} <b>{title}</b>\n"
-            "  💰 <code>{cur}</code> (мін: <code>{mn}</code> · макс: <code>{mx}</code>) {save_badge}"
+            "• <b>{title}</b> ({mp_label})\n"
+            "  <code>{cur}</code>  ·  мін <code>{mn}</code>  ·  макс <code>{mx}</code>"
         ),
         "analytics_header": (
-            "📊 <b>АНАЛІТИКА КОШИКА (ЗА 30 ДНІВ)</b>\n"
-            "──────────────────────────────────\n"
-            "📦 Товарів: <code>{count}</code> · 💎 Економія: <code>{savings}</code>\n"
-            "──────────────────────────────────\n"
+            "📊 <b>Аналітика (30 днів)</b>\n\n"
+            "Товарів: <b>{count}</b>\n"
+            "Економія: <b><code>{savings}</code></b>\n\n"
             "{items}"
         ),
         "ref_welcome_applied": (
-            "🎁 <b>Бонус активовано!</b>\n"
-            "Ви отримали <b>+3 дні тарифу PRO безкоштовно</b> за запрошенням друга!"
+            "🎁 <b>Бонус активовано</b>\n"
+            "Вам нараховано <b>+3 дні PRO</b> за запрошенням."
         ),
         "ref_reward_notify": (
-            "🎉 <b>Новий друг за вашим посиланням!</b>\n"
-            "Вам нараховано <b>+7 днів тарифу PRO</b> безкоштовно!"
+            "🎁 <b>Новий друг за вашим посиланням</b>\n"
+            "Вам нараховано <b>+7 днів PRO</b>."
         ),
         "choose_language": (
-            "🌐 <b>МОВА ІНТЕРФЕЙСУ · LANGUAGE</b>\n"
-            "──────────────────────────────────\n"
-            "Оберіть зручну мову для меню, графіків та сповіщень:"
+            "🌐 <b>Мова інтерфейсу</b>\n\n"
+            "Оберіть мову для меню та сповіщень:"
         ),
         "ref_program_text": (
-            "🎁 <b>БЕЗКОШТОВНИЙ PRO ЗА ДРУЗІВ</b>\n"
-            "──────────────────────────────────\n"
-            "• Вам: <b>+7 днів PRO</b> за кожного друга\n"
-            "• Другу: <b>+3 дні PRO</b> одразу при старті\n\n"
-            "👥 Запрошено друзів: <code>{count}</code>\n"
-            "🔗 <b>Ваше реферальне посилання:</b>\n"
+            "🎁 <b>Бонусна програма</b>\n\n"
+            "• Вам: <b>+7 днів PRO</b> за друга\n"
+            "• Другу: <b>+3 дні PRO</b> при старті\n\n"
+            "Запрошено: <b>{count}</b>\n\n"
+            "Ваше посилання:\n"
             "<code>{link}</code>"
         ),
-        "export_empty": "📭 Список порожній. Додайте хоча б один товар для експорту!",
+        "export_empty": "Список порожній. Додайте товар для експорту.",
         "export_ready": (
-            "📥 <b>CSV-звіт готовий!</b>\n"
-            "Актуальні ціни, мінімуми/максимуми за 30 днів та посилання (Excel / Google Sheets)."
+            "📥 <b>CSV-звіт готовий</b>\n"
+            "Ціни, мінімуми за 30 днів та посилання (Excel / Google Sheets)."
         ),
         "admin_stats": (
-            "🛡 <b>ПАНЕЛЬ АДМІНІСТРАТОРА</b>\n"
-            "──────────────────────────────────\n"
-            "👥 Користувачів: <code>{total_users}</code> (PRO: <code>{pro_users}</code>)\n"
-            "📦 Товарів у базі: <code>{total_products}</code>\n"
-            "🔔 Активних підписок: <code>{total_subs}</code>\n"
-            "📈 Точок історії цін: <code>{total_points}</code>\n\n"
-            "🏬 <b>Топ магазинів:</b>\n"
-            "{mp_lines}"
+            "<b>Панель адміністратора</b>\n\n"
+            "Користувачів: <code>{total_users}</code> (PRO: <code>{pro_users}</code>)\n"
+            "Товарів у базі: <code>{total_products}</code>\n"
+            "Підписок: <code>{total_subs}</code>\n"
+            "Точок історії: <code>{total_points}</code>"
         ),
-        "pro_active_until": "✅ Активний до <b>{date}</b>",
-        "pro_offer_title": "⭐️ <b>ТАРИФ PRICE TRACKER PRO</b>",
+        "pro_active_until": "Активний до <b>{date}</b>",
+        "pro_offer_title": "⭐️ <b>Тариф PRO</b>",
         "pro_offer_body": (
-            "{status}\n"
-            "──────────────────────────────────\n"
-            "💎 <b>Переваги PRO:</b>\n"
-            "• 📦 До <b>{pro_max} товарів</b> (замість {free_max})\n"
-            "• ⚡️ Перевірка цін <b>кожні 12 год</b> (замість 24 год)\n"
-            "• 🎯 Персональна <b>Цільова ціна</b> на кожен товар\n"
-            "• 📊 Повний <b>Deal Score</b> та CSV-експорт\n"
-            "──────────────────────────────────\n"
-            "💳 Від <b>{stars} ⭐️ Telegram Stars</b> або безкоштовно за друзів:"
+            "{status}\n\n"
+            "• До <b>{pro_max} товарів</b> (замість {free_max})\n"
+            "• Перевірка <b>кожні 12 год</b>\n"
+            "• Персональна <b>цільова ціна</b>\n"
+            "• Експорт у CSV"
         ),
-        "test_drop_need_item": "Спочатку додайте хоча б один товар у відстеження!",
+        "test_drop_need_item": "Спочатку додайте хоча б один товар.",
         "alert_body": (
-            "🔥 <b>ЦІНА ВПАЛА! {reason}</b>\n\n"
-            "{mp_label}\n"
-            "📦 <b>{title}</b>\n\n"
-            "📉 Було: <s>{old_p}</s>  ➔  🟢 <b>Стало: {new_p}</b>\n"
-            "💰 <b>Економія: -{diff} (-{pct:.1f}%)</b>"
+            "📉 <b>Ціна знизилась</b>\n\n"
+            "<b>{title}</b>\n"
+            "Магазин: {mp_label}\n\n"
+            "Було: <s>{old_p}</s>\n"
+            "Зараз: <b>{new_p}</b> (-{diff}, -{pct:.1f}%)"
         ),
         "pro_activated_msg": (
-            "🎉 <b>Тариф PRO активовано!</b>\n\n"
-            "• Діє до: <b>{until}</b>\n"
-            "• Ліміт: до <b>{max_p} товарів</b>\n"
-            "• Перевірка цін: <b>кожні 12 год</b>"
+            "⭐️ <b>Тариф PRO активовано</b>\n\n"
+            "Діє до: <b>{until}</b>\n"
+            "Ліміт: до <b>{max_p} товарів</b>"
         ),
 
         # Картка товару та аналітика 30 днів
-        "avail_yes": "🟢 В наявності",
-        "avail_no": "🔴 Немає в наявності",
-        "target_line": "🎯 Ваша ціль: <b>{target}</b>\n",
-        "verdict_best": "🔥 Мінімум за 30 днів — купуйте зараз!",
-        "verdict_good": "✅ Вигідна ціна (нижче середньої)",
-        "verdict_wait": "⏳ Вище середньої — варто зачекати",
+        "avail_yes": "В наявності",
+        "avail_no": "Немає в наявності",
+        "target_line": "Ціль: <b>{target}</b>\n",
+        "verdict_best": "Мінімум за 30 днів — вигідно купувати",
+        "verdict_good": "Нижче середньої ціни",
+        "verdict_wait": "Вище середньої — варто зачекати",
         "stats_30d_box": (
-            "📊 <b>Аналітика за 30 днів:</b>\n"
-            "├ 30 дн. тому: <b>{start}</b>  ({trend})\n"
-            "├ Мін: <b>{min}</b>  •  Макс: <b>{max}</b>\n"
-            "├ Середня: <b>{avg}</b>\n"
-            "├ Вигода (Deal Score): <b>{score}/100</b>\n"
-            "└ <i>{verdict}</i>"
+            "<b>За 30 днів:</b>\n"
+            "• Мін: <b>{min}</b>\n"
+            "• Сер: <b>{avg}</b>\n"
+            "• Макс: <b>{max}</b>\n"
+            "• Deal Score: <b>{score}/100</b>"
         ),
-        "card_Scanning": "🔍 <b>Аналізую товар та ціни за 30 днів...</b> ⏳",
+        "card_Scanning": "Перевіряю ціну в магазині...",
         "err_invalid_url": (
-            "❌ <b>Некоректне посилання</b>\n"
+            "<b>Некоректне посилання</b>\n"
             "Надішліть пряме посилання (<code>https://...</code>) на сторінку товару."
         ),
-        "err_out_of_stock": "📦 <b>Товар тимчасово відсутній у продажу.</b>",
-        "err_not_found": "🔎 <b>Сторінку товару не знайдено (404).</b>",
-        "err_rate_limit": "⏳ <b>Магазин обмежив запити.</b> Спробуйте через 15 секунд.",
+        "err_out_of_stock": "<b>Товар тимчасово відсутній у продажу.</b>",
+        "err_not_found": "<b>Сторінку товару не знайдено (404).</b>",
+        "err_rate_limit": "<b>Магазин обмежив запити.</b> Спробуйте через 15 секунд.",
         "err_parse": (
-            "⚠️ <b>Не вдалося зчитати ціну</b>\n"
-            "Переконайтеся, що це пряме посилання саме на картку товару."
+            "<b>Не вдалося зчитати ціну</b>\n"
+            "Переконайтеся, що це пряме посилання на картку товару."
         ),
-        "err_scraper": "❌ Помилка отримання даних: {err}",
-        "limit_reached_title": "🔒 <b>Ліміт безкоштовного тарифу ({used}/{limit})</b>",
+        "err_scraper": "Помилка отримання даних: {err}",
+        "limit_reached_title": "<b>Ліміт тарифу Free ({used}/{limit})</b>",
         "limit_reached_body": (
-            "Активуйте <b>PRO</b> (до <b>{pro_max} товарів</b> та перевірка кожні 12 год) "
-            "або запросіть друга безкоштовно!"
+            "Активуйте <b>PRO</b> (до <b>{pro_max} товарів</b>) або введіть промокод."
         ),
-        "status_added": "✅ <b>Товар додано!</b> ({used}/{max_limit})",
-        "status_updated": "ℹ️ <b>Дані товару оновлено!</b> ({used}/{max_limit})",
-        "enter_valid_number": "❌ Введіть число (наприклад: <code>12500</code> або <code>49.99</code>).",
-        "price_range_error": "❌ Ціна має бути від 0.01 до 10 000 000.",
-        "product_not_found_msg": "❌ Товар не знайдено.",
-        "product_not_in_list": "❌ Товар не знайдено у вашому списку.",
+        "status_added": "Додано у відстеження ({used}/{max_limit})",
+        "status_updated": "Дані оновлено ({used}/{max_limit})",
+        "enter_valid_number": "Введіть число (наприклад: <code>12500</code> або <code>49.99</code>).",
+        "price_range_error": "Ціна має бути від 0.01 до 10 000 000.",
+        "product_not_found_msg": "Товар не знайдено.",
+        "product_not_in_list": "Товар не знайдено у вашому списку.",
         "target_saved_msg": (
-            "🎯 <b>Цільову ціну збережено: {target}</b>\n"
-            "📦 {title}\n"
-            "💰 Зараз: <b>{current}</b>"
+            "🎯 <b>Ціль збережено: {target}</b>\n"
+            "{title}\n"
+            "Зараз: <b>{current}</b>"
         ),
 
         # Платежі, Мова та Callback-повідомлення
         "invoice_title": "Price Tracker PRO ({days} дн.)",
         "invoice_desc": (
-            "До {pro_max} товарів у 50+ магазинах світу, "
-            "перевірка кожні 12 год, цільова ціна та CSV-аналітика на {days} днів."
+            "До {pro_max} товарів, перевірка кожні 12 год, цільова ціна та CSV-аналітика на {days} днів."
         ),
         "payment_success": (
-            "🎉 <b>Оплата успішна! PRO активовано!</b>\n\n"
-            "• Діє до: <b>{until}</b>\n"
-            "• Ліміт: <b>до {pro_max} товарів</b>\n"
-            "• Перевірка: <b>кожні 12 год</b>"
+            "⭐️ <b>PRO активовано</b>\n\n"
+            "Діє до: <b>{until}</b>\n"
+            "Ліміт: до <b>{pro_max} товарів</b>"
         ),
-        "lang_switched": "✅ Мову змінено на <b>Українську 🇺🇦</b>",
-        "list_cleared_msg": "🧹 Список очищено (видалено: <b>{count}</b>).",
-        "pro_activated_toast": "🎉 Тариф PRO активовано!",
+        "lang_switched": "Мову змінено на <b>Українську</b>",
+        "list_cleared_msg": "Список очищено (видалено: <b>{count}</b>).",
+        "pro_activated_toast": "Тариф PRO активовано",
         "list_empty_toast": "Список порожній.",
-        "refreshing_prices_toast": "🔄 Оновлюю ціни...",
-        "checking_count_msg": "🔄 <b>Перевіряю ціни ({count} шт.)...</b>",
-        "updated_count_msg": "✅ Оновлено: <b>{ok}/{total}</b> товарів.",
-        "item_deleted_toast": "🗑 Товар видалено.",
-        "item_deleted_msg": "🗑 <b>Товар видалено з відстеження.</b>",
+        "refreshing_prices_toast": "Оновлюю ціни...",
+        "checking_count_msg": "Перевіряю ціни ({count} шт.)...",
+        "updated_count_msg": "Оновлено: <b>{ok}/{total}</b> товарів.",
+        "item_deleted_toast": "Товар видалено.",
+        "item_deleted_msg": "<b>Товар видалено з відстеження.</b>",
         "already_deleted_toast": "Вже видалено.",
-        "pro_only_target_alert": "🔒 Цільова ціна доступна у тарифі PRO!",
-        "target_reset_toast": "🧹 Ціль скинуто.",
-        "target_reset_msg": "🧹 <b>Цільову ціну скинуто.</b> Сповіщення надходитимуть при будь-якому зниженні ціни.",
+        "pro_only_target_alert": "Цільова ціна доступна у тарифі PRO.",
+        "target_reset_toast": "Ціль скинуто.",
+        "target_reset_msg": "<b>Цільову ціну скинуто.</b> Сповіщення надходитимуть при будь-якому зниженні.",
         "target_prompt_title": (
-            "🎯 <b>БАЖАНА ЦІНА (TARGET PRICE)</b>\n"
-            "──────────────────────────────────\n"
-            "💰 Поточна ціна: <code>{current}</code>\n"
-            "Оберіть швидку знижку кнопкою або напишіть суму числом у чат:"
+            "🎯 <b>Цільова ціна</b>\n\n"
+            "Зараз: <code>{current}</code>\n"
+            "Оберіть знижку кнопкою або напишіть суму в чат:"
         ),
         "action_cancelled_toast": "Скасовано.",
-        "action_cancelled_msg": "✖️ Введення цільової ціни скасовано.",
-        "building_chart_toast": "📈 Будую графік за 30 днів...",
+        "action_cancelled_msg": "Введення цільової ціни скасовано.",
+        "building_chart_toast": "Будую графік...",
         "chart_caption": (
-            "📈 <b>Динаміка ціни за 30 днів</b>\n"
-            "{mp_label} • <b>{title}</b>\n\n"
-            "💰 Зараз: <b>{price}</b>\n"
-            "📉 Мін: <b>{min_p}</b>  •  📊 Сер: <b>{avg_p}</b>  •  📈 Макс: <b>{max_p}</b>"
+            "📈 <b>Графік за 30 днів</b>\n"
+            "<b>{title}</b> ({mp_label})\n\n"
+            "Зараз: <b>{price}</b>\n"
+            "Мін: <code>{min_p}</code>\n"
+            "Сер: <code>{avg_p}</code>\n"
+            "Макс: <code>{max_p}</code>"
         ),
-        "refreshing_one_toast": "🔄 Перевіряю ціну в магазині...",
-        "price_unchanged_toast": "✅ Актуально: {price} (без змін)",
-        "price_changed_toast": "🔔 Нова ціна: {old} ➔ {new}!",
-        "refresh_failed_msg": "⚠️ Не вдалося оновити ціну зараз.",
-        "input_placeholder": "🔗 Вставте посилання на товар...",
+        "refreshing_one_toast": "Перевіряю ціну...",
+        "price_unchanged_toast": "Актуально: {price}",
+        "price_changed_toast": "Нова ціна: {old} → {new}",
+        "refresh_failed_msg": "Не вдалося оновити ціну зараз.",
+        "input_placeholder": "Назва товару або посилання...",
 
         # Додаткові ключі інлайн-кнопок, графіків та хендлерів
         "ibtn_target_price": "🎯 Цільова ціна",
         "ibtn_refresh": "🔄 Оновити",
         "ibtn_delete": "🗑 Видалити",
         "ibtn_buy_on": "🛒 Відкрити в {store} ↗",
-        "ibtn_buy_discount": "🔥 Купити в {store} ↗",
-        "ibtn_pay_stars_30": "💫 PRO на 30 днів — {stars} ⭐️",
-        "ibtn_pay_stars_90": "🔥 PRO на 90 днів (-20%) — {stars} ⭐️",
-        "ibtn_try_pro_free": "🧪 Тест PRO",
+        "ibtn_buy_discount": "🛒 Купити в {store} ↗",
+        "ibtn_pay_stars_30": "PRO на 30 днів — {stars} ⭐️",
+        "ibtn_pay_stars_90": "PRO на 90 днів (-20%) — {stars} ⭐️",
+        "ibtn_try_pro_free": "Тест PRO",
         "ibtn_share_ref": "📤 Поділитися посиланням",
         "ibtn_chart_short": "📈 30д",
         "ibtn_target_short": "🎯 Ціль",
         "ibtn_cart_report": "📊 Аналітика",
         "start_welcome": (
-            "👋 <b>Вітаємо у Global Price Tracker Bot!</b>\n"
-            "📋 Тариф: <b>{tier}</b> (до <b>{limit}</b> товарів)"
+            "<b>Price Tracker</b> · Тариф: <b>{tier}</b> (до {limit} товарів)"
         ),
         "how_it_works": (
-            "🌍 <b>МОНІТОРИНГ ЦІН 24/7 (УКРАЇНА + СВІТ)</b>\n"
-            "──────────────────────────────────\n"
-            "• 🕒 <b>Історія за 30 днів</b> одразу при додаванні\n"
-            "• 💎 <b>Deal Score (0–100)</b> — перевірка реальності знижки\n"
-            "• 🔔 <b>Миттєві сповіщення</b> при падінні ціни\n"
-            "──────────────────────────────────\n"
-            "👇 <b>Просто надішліть посилання на товар у цей чат!</b>"
+            "ℹ️ <b>Як працює бот</b>\n\n"
+            "1. Надішліть <b>посилання</b> або <b>назву товару</b>.\n"
+            "2. Переглядайте <b>історію цін за 30 днів</b> та графік.\n"
+            "3. Задайте <b>цільову ціну</b> — бот сповістить, коли ціна впаде."
         ),
         "marketplaces_info": (
-            "🏬 <b>ПІДТРИМУВАНІ МАГАЗИНИ (УКРАЇНА + СВІТ)</b>\n"
-            "──────────────────────────────────\n"
-            "🇺🇦 <b>Україна:</b>\n"
-            "Rozetka · Prom.ua · Епіцентр · Comfy · Алло · Фокстрот · MOYO · Цитрус · MAKEUP · EVA · Kasta · Maudau · OLX\n\n"
-            "🌎 <b>США, Європа та Азія:</b>\n"
-            "Amazon · eBay · AliExpress · Temu · SHEIN · Allegro · Ceneo · x-kom · MediaMarkt · Walmart · BestBuy · Steam\n\n"
-            "🌐 <b>+ Універсальний парсер:</b>\n"
-            "Працює з <b>95%+ інтернет-магазинів світу</b> (Shopify, WooCommerce, OpenGraph) у будь-якій валюті (₴, $, €, zł, £)."
+            "🏬 <b>Підтримувані магазини</b>\n\n"
+            "<b>Україна:</b>\n"
+            "Rozetka, Prom.ua, Епіцентр, Comfy, Алло, Фокстрот, MOYO, Цитрус, MAKEUP, EVA, Kasta, Maudau, OLX\n\n"
+            "<b>Світ:</b>\n"
+            "Amazon, eBay, AliExpress, Temu, SHEIN, Allegro, Ceneo, x-kom, MediaMarkt, Walmart, BestBuy, Steam\n\n"
+            "Також підтримується більшість інших інтернет-магазинів за прямим посиланням (₴, $, €, zł, £)."
         ),
-        "alert_price_drop": "📉 Зниження ціни в магазині!",
-        "loading_product": "🔍 <b>Аналізую товар та ціни за 30 днів...</b> ⏳",
+        "alert_price_drop": "Зниження ціни в магазині",
+        "loading_product": "Перевіряю ціну та історію за 30 днів...",
         "invalid_url": (
-            "❌ <b>Некоректне посилання</b>\n"
+            "<b>Некоректне посилання</b>\n"
             "Надішліть пряме посилання (<code>https://...</code>) на сторінку товару."
         ),
         "limit_free_reached": (
-            "🔒 <b>Ліміт безкоштовного тарифу ({free_max} товарів)</b>\n\n"
-            "Активуйте <b>PRO</b> (до <b>{pro_max} товарів</b>, перевірка кожні 12 год та цільова ціна) "
-            "або запросіть друга безкоштовно!"
+            "<b>Досягнуто ліміт тарифу Free ({free_max} товарів)</b>\n\n"
+            "Перейдіть на <b>PRO</b> (до {pro_max} товарів) або активуйте промокод."
         ),
-        "limit_pro_reached": "🔒 <b>Досягнуто ліміту тарифу PRO ({pro_max} товарів).</b>",
-        "err_404": "🔎 <b>Сторінку товару не знайдено (404).</b>",
-        "status_tracking_on": "✅ <b>Товар у відстеженні!</b>",
-        "status_tracking_updated": "ℹ️ <b>Дані та графік оновлено!</b>",
-        "target_set_ok": "🎯 <b>Ціль збережено: {price}</b>\nСповістимо, щойно ціна впаде до цього рівня!",
-        "cancelled": "✖️ Скасовано.",
+        "limit_pro_reached": "<b>Досягнуто ліміт тарифу PRO ({pro_max} товарів).</b>",
+        "err_404": "<b>Сторінку товару не знайдено (404).</b>",
+        "status_tracking_on": "✅ Відстежується",
+        "status_tracking_updated": "🔄 Ціну оновлено",
+        "target_set_ok": "🎯 Ціль збережено: <b>{price}</b>",
+        "cancelled": "Скасовано.",
         "chart_avg": "Середня (30д)",
         "chart_target": "Ваша ціль",
         "chart_min_badge": "МІН",
@@ -486,142 +460,124 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # My products / Analytics / CSV / Admin / Referral
         "empty_tracking": (
-            "📭 <b>YOUR TRACKING LIST IS EMPTY</b>\n"
-            "──────────────────────────────────\n"
-            "Send a product link from any store — and I will build a <b>30-day price chart</b> and start monitoring!"
+            "📭 <b>Your list is empty</b>\n\n"
+            "Send a product link or name to start price tracking."
         ),
         "my_products_header": (
-            "📦 <b>YOUR TRACKED ITEMS ({used}/{max_limit})</b>\n"
-            "──────────────────────────────────\n"
-            "{rows}\n"
-            "──────────────────────────────────\n"
-            "👆 <i>Tap any product below to open its card, 30d chart, or set a target price:</i>"
+            "📦 <b>My Items ({used}/{max_limit})</b>\n\n"
+            "{rows}\n\n"
+            "<i>Tap any product below for details:</i>"
         ),
         "empty_analytics": (
-            "📊 <b>PORTFOLIO ANALYTICS (30 DAYS)</b>\n"
-            "──────────────────────────────────\n"
-            "Add your first product via link to see your 30-day savings statistics!"
+            "📊 <b>Analytics (30 Days)</b>\n\n"
+            "Add your first product via link to see 30-day stats."
         ),
         "analytics_item_row": (
-            "• {mp_label} <b>{title}</b>\n"
-            "  💰 <code>{cur}</code> (low: <code>{mn}</code> · high: <code>{mx}</code>) {save_badge}"
+            "• <b>{title}</b> ({mp_label})\n"
+            "  <code>{cur}</code>  ·  low <code>{mn}</code>  ·  high <code>{mx}</code>"
         ),
         "analytics_header": (
-            "📊 <b>PORTFOLIO ANALYTICS (30 DAYS)</b>\n"
-            "──────────────────────────────────\n"
-            "📦 Items: <code>{count}</code> · 💎 Savings: <code>{savings}</code>\n"
-            "──────────────────────────────────\n"
+            "📊 <b>Analytics (30 Days)</b>\n\n"
+            "Items: <b>{count}</b>\n"
+            "Savings: <b><code>{savings}</code></b>\n\n"
             "{items}"
         ),
         "ref_welcome_applied": (
-            "🎁 <b>Referral Bonus Activated!</b>\n"
-            "You received <b>+3 days of PRO for free</b>!"
+            "🎁 <b>Bonus activated</b>\n"
+            "You received <b>+3 days of PRO</b>."
         ),
         "ref_reward_notify": (
-            "🎉 <b>New friend joined via your link!</b>\n"
-            "You earned <b>+7 days of PRO</b> for free!"
+            "🎁 <b>New friend joined via your link</b>\n"
+            "You earned <b>+7 days of PRO</b>."
         ),
         "choose_language": (
-            "🌐 <b>INTERFACE LANGUAGE</b>\n"
-            "──────────────────────────────────\n"
-            "Select your preferred language for menus, charts, and alerts:"
+            "🌐 <b>Language</b>\n\n"
+            "Select your language for menus and alerts:"
         ),
         "ref_program_text": (
-            "🎁 <b>FREE PRO FOR INVITING FRIENDS</b>\n"
-            "──────────────────────────────────\n"
+            "🎁 <b>Referral Program</b>\n\n"
             "• You get: <b>+7 days of PRO</b> per friend\n"
             "• Friend gets: <b>+3 days of PRO</b> on start\n\n"
-            "👥 Friends invited: <code>{count}</code>\n"
-            "🔗 <b>Your invite link:</b>\n"
+            "Invited: <b>{count}</b>\n\n"
+            "Your link:\n"
             "<code>{link}</code>"
         ),
-        "export_empty": "📭 No tracked products to export yet.",
+        "export_empty": "No tracked products to export yet.",
         "export_ready": (
-            "📥 <b>Your CSV Report is ready!</b>\n"
+            "📥 <b>CSV Report ready</b>\n"
             "Compatible with Excel & Google Sheets."
         ),
         "admin_stats": (
-            "🛡 <b>SAAS ADMIN DASHBOARD</b>\n"
-            "──────────────────────────────────\n"
-            "👥 Users: <code>{total_users}</code> (PRO: <code>{pro_users}</code>)\n"
-            "📦 Products: <code>{total_products}</code> | Subscriptions: <code>{total_subs}</code>\n"
-            "📈 Price data points: <code>{total_points}</code>\n\n"
-            "🏬 <b>Top Stores:</b>\n"
-            "{mp_lines}"
+            "<b>Admin Dashboard</b>\n\n"
+            "Users: <code>{total_users}</code> (PRO: <code>{pro_users}</code>)\n"
+            "Products: <code>{total_products}</code>\n"
+            "Subscriptions: <code>{total_subs}</code>\n"
+            "Price points: <code>{total_points}</code>"
         ),
-        "pro_active_until": "✅ Active until <b>{date}</b>",
-        "pro_offer_title": "⭐️ <b>PRICE TRACKER PRO</b>",
+        "pro_active_until": "Active until <b>{date}</b>",
+        "pro_offer_title": "⭐️ <b>PRO Plan</b>",
         "pro_offer_body": (
-            "Status: {status}\n"
-            "──────────────────────────────────\n"
-            "💎 <b>PRO Benefits:</b>\n"
-            "• 📦 Up to <b>{pro_max} products</b> (instead of {free_max})\n"
-            "• ⚡️ <b>Price checks every 12h</b> (instead of 24h)\n"
-            "• 🎯 <b>Custom Target Price</b> alerts\n"
-            "• 📊 <b>Deal Score</b> & CSV export\n"
-            "──────────────────────────────────\n"
-            "💳 From <b>{stars} ⭐️ Telegram Stars</b> (or free via referral link)"
+            "Status: {status}\n\n"
+            "• Up to <b>{pro_max} products</b> (instead of {free_max})\n"
+            "• Checks <b>every 12h</b>\n"
+            "• Custom <b>Target Price</b> alerts\n"
+            "• CSV export"
         ),
-        "test_drop_need_item": "Add at least one product first to test a price drop alert!",
+        "test_drop_need_item": "Add at least one product first.",
         "alert_body": (
-            "🔥 <b>PRICE DROP! {reason}</b>\n\n"
-            "🏬 {mp_label}\n"
-            "📦 <b>{title}</b>\n\n"
-            "📉 Was: <s>{old_p}</s>  ➔  🟢 <b>Now: {new_p}</b>\n"
-            "💰 <b>Save: -{diff} (-{pct:.1f}%)</b>"
+            "📉 <b>Price Drop</b>\n\n"
+            "<b>{title}</b>\n"
+            "Store: {mp_label}\n\n"
+            "Was: <s>{old_p}</s>\n"
+            "Now: <b>{new_p}</b> (-{diff}, -{pct:.1f}%)"
         ),
         "pro_activated_msg": (
-            "🎉 <b>PRO Plan Activated!</b>\n\n"
-            "📅 Valid until: <b>{until}</b>\n"
-            "📦 Limit: <b>{max_p} products</b> • Checks: <b>every 12h</b>"
+            "⭐️ <b>PRO Plan Activated</b>\n\n"
+            "Valid until: <b>{until}</b>\n"
+            "Limit: <b>{max_p} products</b>"
         ),
 
         # Product card & 30d stats
-        "avail_yes": "🟢 In Stock",
-        "avail_no": "🔴 Out of Stock",
-        "target_line": "🎯 Target Price: <b>{target}</b>\n",
-        "verdict_best": "🔥 30-day low — best time to buy!",
-        "verdict_good": "✅ Below 30-day average",
-        "verdict_wait": "⏳ Above average — wait for a discount",
+        "avail_yes": "In Stock",
+        "avail_no": "Out of Stock",
+        "target_line": "Target: <b>{target}</b>\n",
+        "verdict_best": "30-day low — best time to buy",
+        "verdict_good": "Below 30-day average",
+        "verdict_wait": "Above average — wait for a discount",
         "stats_30d_box": (
-            "📊 <b>30-Day Analytics:</b>\n"
-            "├ 30d Ago: <b>{start}</b>  |  Avg: <b>{avg}</b>\n"
-            "├ Low: <b>{min}</b>  |  High: <b>{max}</b>\n"
-            "├ Trend: {trend}\n"
-            "└ Deal Score: <b>{score}/100</b> — <i>{verdict}</i>"
+            "<b>30-Day Stats:</b>\n"
+            "• Low: <b>{min}</b>\n"
+            "• Avg: <b>{avg}</b>\n"
+            "• High: <b>{max}</b>\n"
+            "• Deal Score: <b>{score}/100</b>"
         ),
-        "card_Scanning": "🔍 <b>Analyzing product & 30-day price history...</b> ⏳",
+        "card_Scanning": "Checking store price...",
         "err_invalid_url": (
-            "❌ <b>Invalid Link</b>\n"
-            "Please send a public product URL (<code>https://...</code>)."
+            "<b>Invalid Link</b>\n"
+            "Please send a direct product URL (<code>https://...</code>)."
         ),
-        "err_out_of_stock": (
-            "📦 <b>Out of Stock</b>\n"
-            "The store does not display an active price right now."
-        ),
-        "err_not_found": "🔎 <b>Product page not found (404).</b>",
-        "err_rate_limit": "⏳ <b>Store rate limit reached.</b> Try again in 10 seconds.",
+        "err_out_of_stock": "<b>Out of Stock</b>",
+        "err_not_found": "<b>Product page not found (404).</b>",
+        "err_rate_limit": "<b>Store rate limit reached.</b> Try again in 15 seconds.",
         "err_parse": (
-            "⚠️ <b>Could not read price from this page</b>\n"
-            "Make sure the link points directly to a single product page."
+            "<b>Could not read price</b>\n"
+            "Make sure the link points directly to a product page."
         ),
-        "err_scraper": "❌ Error: {err}",
-        "limit_reached_title": "🔒 <b>Free Limit Reached ({used}/{limit})</b>",
+        "err_scraper": "Error: {err}",
+        "limit_reached_title": "<b>Free Limit Reached ({used}/{limit})</b>",
         "limit_reached_body": (
-            "Upgrade to <b>PRO</b> (up to <b>{pro_max} products</b>, checks every 12h & target price) "
-            "or invite a friend for free!"
+            "Upgrade to <b>PRO</b> (up to <b>{pro_max} products</b>) or redeem a promo code."
         ),
-        "status_added": "✅ <b>Added to tracking</b> ({used}/{max_limit})",
-        "status_updated": "ℹ️ <b>Price & chart updated</b> ({used}/{max_limit})",
-        "enter_valid_number": "❌ Enter a valid number (e.g. <code>199.99</code>).",
-        "price_range_error": "❌ Price must be between 1 and 10,000,000.",
-        "product_not_found_msg": "❌ Product not found.",
-        "product_not_in_list": "❌ Product is no longer in your list.",
+        "status_added": "Added to tracking ({used}/{max_limit})",
+        "status_updated": "Updated ({used}/{max_limit})",
+        "enter_valid_number": "Enter a valid number (e.g. <code>199.99</code>).",
+        "price_range_error": "Price must be between 1 and 10,000,000.",
+        "product_not_found_msg": "Product not found.",
+        "product_not_in_list": "Product is no longer in your list.",
         "target_saved_msg": (
-            "🎯 <b>Target Saved: {target}</b>\n\n"
-            "📦 <b>{title}</b>\n"
-            "💰 Current: <b>{current}</b>\n\n"
-            "🔔 <i>We'll alert you as soon as the price drops to {target} or lower!</i>"
+            "🎯 <b>Target Saved: {target}</b>\n"
+            "{title}\n"
+            "Current: <b>{current}</b>"
         ),
 
         # Payments & Callbacks
@@ -630,97 +586,91 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Up to {pro_max} products, checks every 12h, Target Price alerts & CSV export ({days} days)."
         ),
         "payment_success": (
-            "🎉 <b>Payment Successful! PRO Activated!</b>\n\n"
-            "📅 Valid until: <b>{until}</b>\n"
-            "📦 Limit: <b>up to {pro_max} products</b> (checks every 12h)"
+            "⭐️ <b>PRO Activated</b>\n\n"
+            "Valid until: <b>{until}</b>\n"
+            "Limit: <b>up to {pro_max} products</b>"
         ),
-        "lang_switched": "✅ Language switched to <b>English 🇬🇧</b>!",
-        "list_cleared_msg": "🧹 Tracking list cleared (<b>{count}</b> items).",
-        "pro_activated_toast": "🎉 PRO Plan activated!",
+        "lang_switched": "Language switched to <b>English</b>",
+        "list_cleared_msg": "Tracking list cleared (<b>{count}</b> items).",
+        "pro_activated_toast": "PRO Plan activated",
         "list_empty_toast": "Your list is empty.",
-        "refreshing_prices_toast": "🔄 Refreshing prices...",
-        "checking_count_msg": "🔄 <b>Checking prices for {count} items...</b>",
-        "updated_count_msg": "✅ Updated prices for <b>{ok}/{total}</b> items.",
-        "item_deleted_toast": "🗑 Removed from tracking.",
-        "item_deleted_msg": "🗑 <b>Product removed from tracking.</b>",
+        "refreshing_prices_toast": "Refreshing prices...",
+        "checking_count_msg": "Checking prices ({count})...",
+        "updated_count_msg": "Updated: <b>{ok}/{total}</b> items.",
+        "item_deleted_toast": "Removed.",
+        "item_deleted_msg": "<b>Product removed from tracking.</b>",
         "already_deleted_toast": "Already removed.",
-        "pro_only_target_alert": (
-            "🔒 Target Price is a PRO feature!\n\n"
-            "Open '⭐️ PRO' or invite a friend for free access."
-        ),
-        "target_reset_toast": "🧹 Target cleared.",
-        "target_reset_msg": "🧹 <b>Target price cleared.</b>",
+        "pro_only_target_alert": "Target Price is a PRO feature.",
+        "target_reset_toast": "Target cleared.",
+        "target_reset_msg": "<b>Target price cleared.</b>",
         "target_prompt_title": (
             "🎯 <b>Target Price</b>\n\n"
-            "📦 <b>{title}</b>\n"
-            "💰 Current: <b>{current}</b>\n\n"
-            "👇 Tap a quick discount button below or type your price (e.g. <code>{suggested}</code>):"
+            "Current: <code>{current}</code>\n"
+            "Choose a discount button or type your price:"
         ),
         "action_cancelled_toast": "Cancelled.",
-        "action_cancelled_msg": "✖️ Cancelled.",
-        "building_chart_toast": "📈 Building 30d chart...",
+        "action_cancelled_msg": "Cancelled.",
+        "building_chart_toast": "Building chart...",
         "chart_caption": (
-            "📈 <b>30-Day Price History</b>\n"
-            "{mp_label} • <b>{title}</b>\n"
-            "💰 Current: <b>{price}</b>"
+            "📈 <b>30-Day Price Chart</b>\n"
+            "<b>{title}</b> ({mp_label})\n\n"
+            "Current: <b>{price}</b>\n"
+            "Low: <code>{min_p}</code>\n"
+            "Avg: <code>{avg_p}</code>\n"
+            "High: <code>{max_p}</code>"
         ),
-        "refreshing_one_toast": "🔄 Checking store price...",
-        "price_unchanged_toast": "✅ Up to date: {price}",
-        "price_changed_toast": "🔔 New price: {old} ➔ {new}!",
-        "refresh_failed_msg": "⚠️ Could not refresh price right now.",
-        "input_placeholder": "🔗 Paste a product link...",
+        "refreshing_one_toast": "Checking store price...",
+        "price_unchanged_toast": "Up to date: {price}",
+        "price_changed_toast": "New price: {old} → {new}",
+        "refresh_failed_msg": "Could not refresh price right now.",
+        "input_placeholder": "Product name or link...",
 
         # Additional keys for inline buttons, charts, and handlers
         "ibtn_target_price": "🎯 Target Price",
         "ibtn_refresh": "🔄 Refresh",
         "ibtn_delete": "🗑 Delete",
         "ibtn_buy_on": "🛒 Open on {store} ↗",
-        "ibtn_buy_discount": "🔥 Buy on {store} ↗",
-        "ibtn_pay_stars_30": "💫 PRO 30 Days — {stars} ⭐️",
-        "ibtn_pay_stars_90": "🔥 PRO 90 Days (-20%) — {stars} ⭐️",
-        "ibtn_try_pro_free": "🧪 Try PRO",
-        "ibtn_share_ref": "📤 Share Invite Link",
+        "ibtn_buy_discount": "🛒 Buy on {store} ↗",
+        "ibtn_pay_stars_30": "PRO 30 Days — {stars} ⭐️",
+        "ibtn_pay_stars_90": "PRO 90 Days (-20%) — {stars} ⭐️",
+        "ibtn_try_pro_free": "Try PRO",
+        "ibtn_share_ref": "📤 Share Link",
         "ibtn_chart_short": "📈 30d",
         "ibtn_target_short": "🎯 Goal",
         "ibtn_cart_report": "📊 Analytics",
         "start_welcome": (
-            "👋 <b>Welcome to Global Price Tracker Bot!</b>\n"
-            "📋 Plan: <b>{tier}</b> (up to <b>{limit}</b> items)"
+            "<b>Price Tracker</b> · Plan: <b>{tier}</b> (up to {limit} items)"
         ),
         "how_it_works": (
-            "🌍 <b>24/7 Price Monitoring (Global + Local)</b>\n\n"
-            "• 🕒 <b>30-Day Price History</b> right when you add a link\n"
-            "• 💎 <b>Deal Score (0–100)</b> — verify genuine discounts\n"
-            "• 🔔 <b>Instant Alerts</b> on every price drop\n\n"
-            "👇 <b>Paste and send any product link into this chat!</b>"
+            "ℹ️ <b>How It Works</b>\n\n"
+            "1. Send a <b>link</b> or <b>product name</b>.\n"
+            "2. View <b>30-day price history</b> and chart.\n"
+            "3. Set a <b>target price</b> to get instant drop alerts."
         ),
         "marketplaces_info": (
-            "🏬 <b>SUPPORTED MARKETPLACES (GLOBAL + UA)</b>\n"
-            "──────────────────────────────────\n"
-            "🌎 <b>Global, US, EU & Asia:</b>\n"
-            "Amazon · eBay · AliExpress · Temu · SHEIN · Walmart · BestBuy · Allegro · Ceneo · x-kom · MediaMarkt · Steam\n\n"
-            "🇺🇦 <b>Ukraine:</b>\n"
-            "Rozetka · Prom.ua · Epicentr · Comfy · Allo · Foxtrot · MOYO · Citrus · MAKEUP · EVA · Kasta · Maudau · OLX\n\n"
-            "🌐 <b>+ Universal Smart Parser:</b>\n"
-            "Works with <b>95%+ of online stores worldwide</b> (Shopify, WooCommerce, OpenGraph) in any currency ($, €, £, zł, ₴)."
+            "🏬 <b>Supported Stores</b>\n\n"
+            "<b>Global:</b>\n"
+            "Amazon, eBay, AliExpress, Temu, SHEIN, Walmart, BestBuy, Allegro, Ceneo, x-kom, MediaMarkt, Steam\n\n"
+            "<b>Ukraine:</b>\n"
+            "Rozetka, Prom.ua, Epicentr, Comfy, Allo, Foxtrot, MOYO, Citrus, MAKEUP, EVA, Kasta, Maudau, OLX\n\n"
+            "Also supports most online stores via direct link ($, €, £, zł, ₴)."
         ),
-        "alert_price_drop": "📉 Store price dropped!",
-        "loading_product": "🔍 <b>Analyzing product & 30-day prices...</b> ⏳",
+        "alert_price_drop": "Store price dropped",
+        "loading_product": "Checking price & 30-day history...",
         "invalid_url": (
-            "❌ <b>Invalid Link</b>\n"
+            "<b>Invalid Link</b>\n"
             "Please send a direct link (<code>https://...</code>) to a product page."
         ),
         "limit_free_reached": (
-            "🔒 <b>Free Plan Limit Reached ({free_max} items)</b>\n\n"
-            "Upgrade to <b>PRO</b> (up to <b>{pro_max} items</b>, checks every 12h & target price) "
-            "or invite a friend for free!"
+            "<b>Free Plan Limit Reached ({free_max} items)</b>\n\n"
+            "Upgrade to <b>PRO</b> (up to {pro_max} items) or redeem a promo code."
         ),
-        "limit_pro_reached": "🔒 <b>Maximum PRO plan limit reached ({pro_max} items).</b>",
-        "err_404": "🔎 <b>Product page not found (404).</b>",
-        "status_tracking_on": "✅ <b>Added to tracking!</b>",
-        "status_tracking_updated": "ℹ️ <b>Price & chart updated!</b>",
-        "target_set_ok": "🎯 <b>Target saved: {price}</b>\nWe'll notify you as soon as the price drops to this level!",
-        "cancelled": "✖️ Cancelled.",
+        "limit_pro_reached": "<b>Maximum PRO plan limit reached ({pro_max} items).</b>",
+        "err_404": "<b>Product page not found (404).</b>",
+        "status_tracking_on": "✅ Tracking active",
+        "status_tracking_updated": "🔄 Price updated",
+        "target_set_ok": "🎯 Target saved: <b>{price}</b>",
+        "cancelled": "Cancelled.",
         "chart_avg": "30d Avg",
         "chart_target": "Target",
         "chart_min_badge": "LOW",
@@ -813,142 +763,124 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
         # Мои товары / Аналитика / CSV / Админка / Рефералы
         "empty_tracking": (
-            "📭 <b>СПИСОК ОТСЛЕЖИВАНИЯ ПУСТ</b>\n"
-            "──────────────────────────────────\n"
-            "Отправьте ссылку на товар из любого магазина — я построю <b>график цен за 30 дней</b> и начну мониторинг!"
+            "📭 <b>Список пуст</b>\n\n"
+            "Отправьте ссылку или название товара, чтобы начать отслеживание цен."
         ),
         "my_products_header": (
-            "📦 <b>МОИ ТОВАРЫ В ОТСЛЕЖИВАНИИ ({used}/{max_limit})</b>\n"
-            "──────────────────────────────────\n"
-            "{rows}\n"
-            "──────────────────────────────────\n"
-            "👆 <i>Нажмите на товар ниже, чтобы открыть карточку, график или задать цель:</i>"
+            "📦 <b>Мои товары ({used}/{max_limit})</b>\n\n"
+            "{rows}\n\n"
+            "<i>Нажмите на товар ниже для деталей:</i>"
         ),
         "empty_analytics": (
-            "📊 <b>АНАЛИТИКА КОРЗИНЫ (30 ДНЕЙ)</b>\n"
-            "──────────────────────────────────\n"
-            "Добавьте первый товар по ссылке, чтобы видеть статистику экономии за 30 дней!"
+            "📊 <b>Аналитика (30 дней)</b>\n\n"
+            "Список пуст. Добавьте первый товар по ссылке."
         ),
         "analytics_item_row": (
-            "• {mp_label} <b>{title}</b>\n"
-            "  💰 <code>{cur}</code> (мин: <code>{mn}</code> · макс: <code>{mx}</code>) {save_badge}"
+            "• <b>{title}</b> ({mp_label})\n"
+            "  <code>{cur}</code>  ·  мин <code>{mn}</code>  ·  макс <code>{mx}</code>"
         ),
         "analytics_header": (
-            "📊 <b>АНАЛИТИКА КОРЗИНЫ (30 ДНЕЙ)</b>\n"
-            "──────────────────────────────────\n"
-            "📦 Товаров: <code>{count}</code> · 💎 Экономия: <code>{savings}</code>\n"
-            "──────────────────────────────────\n"
+            "📊 <b>Аналитика (30 дней)</b>\n\n"
+            "Товаров: <b>{count}</b>\n"
+            "Экономия: <b><code>{savings}</code></b>\n\n"
             "{items}"
         ),
         "ref_welcome_applied": (
-            "🎁 <b>Бонус активирован!</b>\n"
-            "Вы получили <b>+3 дня PRO бесплатно</b> по приглашению друга!"
+            "🎁 <b>Бонус активирован</b>\n"
+            "Вам начислено <b>+3 дня PRO</b> по приглашению."
         ),
         "ref_reward_notify": (
-            "🎉 <b>Новый друг по вашей ссылке!</b>\n"
-            "Вам начислено <b>+7 дней PRO</b> бесплатно!"
+            "🎁 <b>Новый друг по вашей ссылке</b>\n"
+            "Вам начислено <b>+7 дней PRO</b>."
         ),
         "choose_language": (
-            "🌐 <b>ЯЗЫК ИНТЕРФЕЙСА · LANGUAGE</b>\n"
-            "──────────────────────────────────\n"
-            "Выберите удобный язык для меню, графиков и уведомлений:"
+            "🌐 <b>Язык интерфейса</b>\n\n"
+            "Выберите язык для меню и уведомлений:"
         ),
         "ref_program_text": (
-            "🎁 <b>БЕСПЛАТНЫЙ PRO ЗА ДРУЗЕЙ</b>\n"
-            "──────────────────────────────────\n"
-            "• Вам: <b>+7 дней PRO</b> за каждого друга\n"
-            "• Другу: <b>+3 дня PRO</b> сразу на старте\n\n"
-            "👥 Приглашено друзей: <code>{count}</code>\n"
-            "🔗 <b>Ваша ссылка:</b>\n"
+            "🎁 <b>Бонусная программа</b>\n\n"
+            "• Вам: <b>+7 дней PRO</b> за друга\n"
+            "• Другу: <b>+3 дня PRO</b> на старте\n\n"
+            "Приглашено: <b>{count}</b>\n\n"
+            "Ваша ссылка:\n"
             "<code>{link}</code>"
         ),
-        "export_empty": "📭 Нет товаров для экспорта.",
+        "export_empty": "Нет товаров для экспорта.",
         "export_ready": (
-            "📥 <b>Ваш CSV-отчёт готов!</b>\n"
+            "📥 <b>CSV-отчёт готов</b>\n"
             "Таблица открывается в Excel и Google Sheets."
         ),
         "admin_stats": (
-            "🛡 <b>SAAS ADMIN DASHBOARD</b>\n"
-            "──────────────────────────────────\n"
-            "👥 Пользователей: <code>{total_users}</code> (PRO: <code>{pro_users}</code>)\n"
-            "📦 Товаров: <code>{total_products}</code> | Подписок: <code>{total_subs}</code>\n"
-            "📈 Точек истории цен: <code>{total_points}</code>\n\n"
-            "🏬 <b>Топ магазинов:</b>\n"
-            "{mp_lines}"
+            "<b>Панель администратора</b>\n\n"
+            "Пользователей: <code>{total_users}</code> (PRO: <code>{pro_users}</code>)\n"
+            "Товаров: <code>{total_products}</code>\n"
+            "Подписок: <code>{total_subs}</code>\n"
+            "Точек истории: <code>{total_points}</code>"
         ),
-        "pro_active_until": "✅ Активен до <b>{date}</b>",
-        "pro_offer_title": "⭐️ <b>ПОДПИСКА PRICE TRACKER PRO</b>",
+        "pro_active_until": "Активен до <b>{date}</b>",
+        "pro_offer_title": "⭐️ <b>Тариф PRO</b>",
         "pro_offer_body": (
-            "Статус: {status}\n"
-            "──────────────────────────────────\n"
-            "💎 <b>Преимущества PRO:</b>\n"
-            "• 📦 До <b>{pro_max} товаров</b> (вместо {free_max})\n"
-            "• ⚡️ <b>Проверка каждые 12 ч</b> (вместо раз в сутки)\n"
-            "• 🎯 <b>Целевая цена</b> для каждого товара\n"
-            "• 📊 <b>Deal Score</b> и экспорт в CSV/Excel\n"
-            "──────────────────────────────────\n"
-            "💳 От <b>{stars} ⭐️ Telegram Stars</b> (или бесплатно за друзей)"
+            "Статус: {status}\n\n"
+            "• До <b>{pro_max} товаров</b> (вместо {free_max})\n"
+            "• Проверка <b>каждые 12 ч</b>\n"
+            "• <b>Целевая цена</b> для каждого товара\n"
+            "• Экспорт в CSV/Excel"
         ),
-        "test_drop_need_item": "Сначала добавьте хотя бы один товар, чтобы протестировать уведомление!",
+        "test_drop_need_item": "Сначала добавьте хотя бы один товар.",
         "alert_body": (
-            "🔥 <b>ЦЕНА УПАЛА! {reason}</b>\n\n"
-            "🏬 {mp_label}\n"
-            "📦 <b>{title}</b>\n\n"
-            "📉 Было: <s>{old_p}</s>  ➔  🟢 <b>Стало: {new_p}</b>\n"
-            "💰 <b>Экономия: -{diff} (-{pct:.1f}%)</b>"
+            "📉 <b>Цена снизилась</b>\n\n"
+            "<b>{title}</b>\n"
+            "Магазин: {mp_label}\n\n"
+            "Было: <s>{old_p}</s>\n"
+            "Сейчас: <b>{new_p}</b> (-{diff}, -{pct:.1f}%)"
         ),
         "pro_activated_msg": (
-            "🎉 <b>Тариф PRO активирован!</b>\n\n"
-            "📅 Действует до: <b>{until}</b>\n"
-            "📦 Лимит: <b>до {max_p} товаров</b> • Проверка: <b>каждые 12 ч</b>"
+            "⭐️ <b>Тариф PRO активирован</b>\n\n"
+            "Действует до: <b>{until}</b>\n"
+            "Лимит: <b>до {max_p} товаров</b>"
         ),
 
         # Карточка товара и аналитика 30 дней
-        "avail_yes": "🟢 В наличии",
-        "avail_no": "🔴 Нет в наличии",
-        "target_line": "🎯 Целевая цена: <b>{target}</b>\n",
-        "verdict_best": "🔥 Минимум за 30 дней — выгодно покупать!",
-        "verdict_good": "✅ Цена ниже средней за месяц",
-        "verdict_wait": "⏳ Выше средней — стоит подождать скидку",
+        "avail_yes": "В наличии",
+        "avail_no": "Нет в наличии",
+        "target_line": "Цель: <b>{target}</b>\n",
+        "verdict_best": "Минимум за 30 дней — выгодно покупать",
+        "verdict_good": "Ниже средней за месяц",
+        "verdict_wait": "Выше средней — стоит подождать",
         "stats_30d_box": (
-            "📊 <b>Аналитика за 30 дней:</b>\n"
-            "├ 30 дн. назад: <b>{start}</b>  |  Средняя: <b>{avg}</b>\n"
-            "├ Мин: <b>{min}</b>  |  Макс: <b>{max}</b>\n"
-            "├ Динамика: {trend}\n"
-            "└ Deal Score: <b>{score}/100</b> — <i>{verdict}</i>"
+            "<b>За 30 дней:</b>\n"
+            "• Мин: <b>{min}</b>\n"
+            "• Средняя: <b>{avg}</b>\n"
+            "• Макс: <b>{max}</b>\n"
+            "• Deal Score: <b>{score}/100</b>"
         ),
-        "card_Scanning": "🔍 <b>Анализирую товар и историю цен за 30 дней...</b> ⏳",
+        "card_Scanning": "Проверяю цену в магазине...",
         "err_invalid_url": (
-            "❌ <b>Некорректная ссылка</b>\n"
+            "<b>Некорректная ссылка</b>\n"
             "Отправьте прямую ссылку (<code>https://...</code>) на страницу товара."
         ),
-        "err_out_of_stock": (
-            "📦 <b>Товар отсутствует в продаже</b>\n"
-            "Магазин сейчас не указывает актуальную цену."
-        ),
-        "err_not_found": "🔎 <b>Страница товара не найдена (404).</b>",
-        "err_rate_limit": "⏳ <b>Магазин временно ограничил запросы.</b> Повторите через 10 сек.",
+        "err_out_of_stock": "<b>Товар отсутствует в продаже.</b>",
+        "err_not_found": "<b>Страница товара не найдена (404).</b>",
+        "err_rate_limit": "<b>Магазин временно ограничил запросы.</b> Повторите через 15 сек.",
         "err_parse": (
-            "⚠️ <b>Не удалось считать цену</b>\n"
-            "Убедитесь, что ссылка ведёт на конкретный товар."
+            "<b>Не удалось считать цену</b>\n"
+            "Убедитесь, что ссылка ведёт на страницу товара."
         ),
-        "err_scraper": "❌ Ошибка: {err}",
-        "limit_reached_title": "🔒 <b>Лимит бесплатного тарифа ({used}/{limit})</b>",
+        "err_scraper": "Ошибка: {err}",
+        "limit_reached_title": "<b>Лимит тарифа Free ({used}/{limit})</b>",
         "limit_reached_body": (
-            "Активируйте <b>PRO</b> (до <b>{pro_max} товаров</b>, проверка каждые 12 ч и целевая цена) "
-            "или пригласите друга бесплатно!"
+            "Активируйте <b>PRO</b> (до <b>{pro_max} товаров</b>) или введите промокод."
         ),
-        "status_added": "✅ <b>Добавлено в мониторинг</b> ({used}/{max_limit})",
-        "status_updated": "ℹ️ <b>Данные и график обновлены</b> ({used}/{max_limit})",
-        "enter_valid_number": "❌ Введите корректное число (например: <code>4500</code>).",
-        "price_range_error": "❌ Цена должна быть от 1 до 10 000 000.",
-        "product_not_found_msg": "❌ Товар не найден.",
-        "product_not_in_list": "❌ Товар больше не отслеживается.",
+        "status_added": "Добавлено в отслеживание ({used}/{max_limit})",
+        "status_updated": "Обновлено ({used}/{max_limit})",
+        "enter_valid_number": "Введите число (например: <code>4500</code>).",
+        "price_range_error": "Цена должна быть от 1 до 10 000 000.",
+        "product_not_found_msg": "Товар не найден.",
+        "product_not_in_list": "Товар больше не отслеживается.",
         "target_saved_msg": (
-            "🎯 <b>Цель сохранена: {target}</b>\n\n"
-            "📦 <b>{title}</b>\n"
-            "💰 Текущая цена: <b>{current}</b>\n\n"
-            "🔔 <i>Сообщим, как только цена опустится до {target} или ниже!</i>"
+            "🎯 <b>Цель сохранена: {target}</b>\n"
+            "{title}\n"
+            "Сейчас: <b>{current}</b>"
         ),
 
         # Платежи и Callback-уведомления
@@ -957,97 +889,91 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "До {pro_max} товаров, проверка каждые 12 ч, целевая цена и CSV-аналитика ({days} дн.)."
         ),
         "payment_success": (
-            "🎉 <b>Оплата успешна! Тариф PRO активирован!</b>\n\n"
-            "📅 Действует до: <b>{until}</b>\n"
-            "📦 Лимит: <b>до {pro_max} товаров</b> (проверка каждые 12 ч)"
+            "⭐️ <b>Тариф PRO активирован</b>\n\n"
+            "Действует до: <b>{until}</b>\n"
+            "Лимит: <b>до {pro_max} товаров</b>"
         ),
-        "lang_switched": "✅ Язык изменён на <b>Русский 🇷🇺</b>!",
-        "list_cleared_msg": "🧹 Список очищен (<b>{count}</b> товаров).",
-        "pro_activated_toast": "🎉 Тариф PRO активирован!",
+        "lang_switched": "Язык изменён на <b>Русский</b>",
+        "list_cleared_msg": "Список очищен (<b>{count}</b> товаров).",
+        "pro_activated_toast": "Тариф PRO активирован",
         "list_empty_toast": "Ваш список пуст.",
-        "refreshing_prices_toast": "🔄 Обновляю цены...",
-        "checking_count_msg": "🔄 <b>Проверяю цены для {count} товаров...</b>",
-        "updated_count_msg": "✅ Обновлены цены для <b>{ok}/{total}</b> товаров.",
-        "item_deleted_toast": "🗑 Удалено из отслеживания.",
-        "item_deleted_msg": "🗑 <b>Отслеживание товара прекращено.</b>",
+        "refreshing_prices_toast": "Обновляю цены...",
+        "checking_count_msg": "Проверяю цены ({count})...",
+        "updated_count_msg": "Обновлено: <b>{ok}/{total}</b> товаров.",
+        "item_deleted_toast": "Удалено.",
+        "item_deleted_msg": "<b>Отслеживание товара прекращено.</b>",
         "already_deleted_toast": "Уже удалено.",
-        "pro_only_target_alert": (
-            "🔒 Целевая цена доступна в тарифе PRO!\n\n"
-            "Откройте «⭐️ PRO» или пригласите друга бесплатно."
-        ),
-        "target_reset_toast": "🧹 Цель сброшена.",
-        "target_reset_msg": "🧹 <b>Целевая цена сброшена.</b>",
+        "pro_only_target_alert": "Целевая цена доступна в тарифе PRO.",
+        "target_reset_toast": "Цель сброшена.",
+        "target_reset_msg": "<b>Целевая цена сброшена.</b>",
         "target_prompt_title": (
             "🎯 <b>Целевая цена</b>\n\n"
-            "📦 <b>{title}</b>\n"
-            "💰 Сейчас: <b>{current}</b>\n\n"
-            "👇 Выберите быструю скидку кнопкой ниже или введите сумму в чат (например: <code>{suggested}</code>):"
+            "Сейчас: <code>{current}</code>\n"
+            "Выберите скидку кнопкой или введите сумму в чат:"
         ),
         "action_cancelled_toast": "Отменено.",
-        "action_cancelled_msg": "✖️ Отменено.",
-        "building_chart_toast": "📈 Строю график за 30д...",
+        "action_cancelled_msg": "Отменено.",
+        "building_chart_toast": "Строю график...",
         "chart_caption": (
-            "📈 <b>Динамика цены за 30 дней</b>\n"
-            "{mp_label} • <b>{title}</b>\n"
-            "💰 Сейчас: <b>{price}</b>"
+            "📈 <b>График за 30 дней</b>\n"
+            "<b>{title}</b> ({mp_label})\n\n"
+            "Сейчас: <b>{price}</b>\n"
+            "Мин: <code>{min_p}</code>\n"
+            "Средняя: <code>{avg_p}</code>\n"
+            "Макс: <code>{max_p}</code>"
         ),
-        "refreshing_one_toast": "🔄 Проверяю цену в магазине...",
-        "price_unchanged_toast": "✅ Цена актуальна: {price}",
-        "price_changed_toast": "🔔 Новая цена: {old} ➔ {new}!",
-        "refresh_failed_msg": "⚠️ Не удалось обновить цену сейчас.",
-        "input_placeholder": "🔗 Вставьте ссылку на товар...",
+        "refreshing_one_toast": "Проверяю цену...",
+        "price_unchanged_toast": "Цена актуальна: {price}",
+        "price_changed_toast": "Новая цена: {old} → {new}",
+        "refresh_failed_msg": "Не удалось обновить цену сейчас.",
+        "input_placeholder": "Название товара или ссылка...",
 
         # Дополнительные ключи инлайн-кнопок, графиков и хендлеров
         "ibtn_target_price": "🎯 Целевая цена",
         "ibtn_refresh": "🔄 Обновить",
         "ibtn_delete": "🗑 Удалить",
         "ibtn_buy_on": "🛒 Открыть в {store} ↗",
-        "ibtn_buy_discount": "🔥 Купить в {store} ↗",
-        "ibtn_pay_stars_30": "💫 PRO на 30 дней — {stars} ⭐️",
-        "ibtn_pay_stars_90": "🔥 PRO на 90 дней (-20%) — {stars} ⭐️",
-        "ibtn_try_pro_free": "🧪 Тест PRO",
+        "ibtn_buy_discount": "🛒 Купить в {store} ↗",
+        "ibtn_pay_stars_30": "PRO на 30 дней — {stars} ⭐️",
+        "ibtn_pay_stars_90": "PRO на 90 дней (-20%) — {stars} ⭐️",
+        "ibtn_try_pro_free": "Тест PRO",
         "ibtn_share_ref": "📤 Поделиться ссылкой",
         "ibtn_chart_short": "📈 30д",
         "ibtn_target_short": "🎯 Цель",
         "ibtn_cart_report": "📊 Аналитика",
         "start_welcome": (
-            "👋 <b>Добро пожаловать в Global Price Tracker Bot!</b>\n"
-            "📋 Тариф: <b>{tier}</b> (до <b>{limit}</b> товаров)"
+            "<b>Price Tracker</b> · Тариф: <b>{tier}</b> (до {limit} товаров)"
         ),
         "how_it_works": (
-            "🌍 <b>Мониторинг цен 24/7 (Украина + Мир)</b>\n\n"
-            "• 🕒 <b>История за 30 дней</b> сразу при добавлении\n"
-            "• 💎 <b>Deal Score (0–100)</b> — проверка реальности скидки\n"
-            "• 🔔 <b>Мгновенные уведомления</b> при падении цены\n\n"
-            "👇 <b>Просто отправьте ссылку на товар в этот чат!</b>"
+            "ℹ️ <b>Как работает бот</b>\n\n"
+            "1. Отправьте <b>ссылку</b> или <b>название товара</b>.\n"
+            "2. Смотрите <b>историю цен за 30 дней</b> и график.\n"
+            "3. Задайте <b>целевую цену</b> — бот сообщит, когда цена снизится."
         ),
         "marketplaces_info": (
-            "🏬 <b>ПОДДЕРЖИВАЕМЫЕ МАГАЗИНЫ (УКРАИНА + МИР)</b>\n"
-            "──────────────────────────────────\n"
-            "🇺🇦 <b>Украина:</b>\n"
-            "Rozetka · Prom.ua · Эпицентр · Comfy · Алло · Фокстрот · MOYO · Цитрус · MAKEUP · EVA · Kasta · Maudau · OLX\n\n"
-            "🌎 <b>США, Европа и Азия:</b>\n"
-            "Amazon · eBay · AliExpress · Temu · SHEIN · Allegro · Ceneo · x-kom · MediaMarkt · Walmart · BestBuy · Steam\n\n"
-            "🌐 <b>+ Универсальный парсер:</b>\n"
-            "Работает с <b>95%+ интернет-магазинов мира</b> (Shopify, WooCommerce, OpenGraph) в любой валюте (₴, $, €, zł, £)."
+            "🏬 <b>Поддерживаемые магазины</b>\n\n"
+            "<b>Украина:</b>\n"
+            "Rozetka, Prom.ua, Эпицентр, Comfy, Алло, Фокстрот, MOYO, Цитрус, MAKEUP, EVA, Kasta, Maudau, OLX\n\n"
+            "<b>Мир:</b>\n"
+            "Amazon, eBay, AliExpress, Temu, SHEIN, Allegro, Ceneo, x-kom, MediaMarkt, Walmart, BestBuy, Steam\n\n"
+            "Также поддерживается большинство интернет-магазинов по прямой ссылке (₴, $, €, zł, £)."
         ),
-        "alert_price_drop": "📉 Снижение цены в магазине!",
-        "loading_product": "🔍 <b>Анализирую товар и цены за 30 дней...</b> ⏳",
+        "alert_price_drop": "Снижение цены в магазине",
+        "loading_product": "Проверяю цену и историю за 30 дней...",
         "invalid_url": (
-            "❌ <b>Некорректная ссылка</b>\n"
+            "<b>Некорректная ссылка</b>\n"
             "Отправьте прямую ссылку (<code>https://...</code>) на страницу товара."
         ),
         "limit_free_reached": (
-            "🔒 <b>Лимит бесплатного тарифа ({free_max} товаров)</b>\n\n"
-            "Активируйте <b>PRO</b> (до <b>{pro_max} товаров</b>, проверка каждые 12 ч и целевая цена) "
-            "или пригласите друга бесплатно!"
+            "<b>Достигнут лимит тарифа Free ({free_max} товаров)</b>\n\n"
+            "Перейдите на <b>PRO</b> (до {pro_max} товаров) или активируйте промокод."
         ),
-        "limit_pro_reached": "🔒 <b>Достигнут лимит тарифа PRO ({pro_max} товаров).</b>",
-        "err_404": "🔎 <b>Страница товара не найдена (404).</b>",
-        "status_tracking_on": "✅ <b>Товар в отслеживании!</b>",
-        "status_tracking_updated": "ℹ️ <b>Данные и график обновлены!</b>",
-        "target_set_ok": "🎯 <b>Цель сохранена: {price}</b>\nСообщим, как только цена опустится до этого уровня!",
-        "cancelled": "✖️ Отменено.",
+        "limit_pro_reached": "<b>Достигнут лимит тарифа PRO ({pro_max} товаров).</b>",
+        "err_404": "<b>Страница товара не найдена (404).</b>",
+        "status_tracking_on": "✅ Отслеживается",
+        "status_tracking_updated": "🔄 Цена обновлена",
+        "target_set_ok": "🎯 Цель сохранена: <b>{price}</b>",
+        "cancelled": "Отменено.",
         "chart_avg": "Средняя (30д)",
         "chart_target": "Ваша цель",
         "chart_min_badge": "МИН",
