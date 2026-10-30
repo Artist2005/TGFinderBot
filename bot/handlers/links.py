@@ -541,11 +541,11 @@ async def handle_inline_query(
 
         msg_text = embed_invisible_image_link(
             (
-                f"<b>{html.escape(off.title[:85])}</b>\n"
-                f"Магазин: <b>{mp_short}</b>\n\n"
-                f"Ціна: <b><code>{price_fmt}</code></b>{old_part}\n"
-                f"Оцінка вигоди (Deal Score): <code>{score}/100</code>\n\n"
-                f"<i>Знайдено через @{bot_username}</i>"
+                f"🛍 <b>{html.escape(off.title[:85])}</b>\n"
+                f"🏪 Магазин: <b>{mp_short}</b>\n\n"
+                f"💰 Ціна: <b><code>{price_fmt}</code></b>{old_part}\n"
+                f"⚖️ Оцінка вигоди (Deal Score): <code>{score}/100</code>\n\n"
+                f"🔎 <i>Знайдено через @{bot_username}</i>"
             ),
             off.image_url or off.url,
         )
